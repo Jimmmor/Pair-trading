@@ -218,9 +218,9 @@ with st.expander("📊 Correlatie"):
         line=dict(color='lightgreen'),
         fill='tozeroy',
         fillcolor='rgba(0,255,0,0.1)'
-        ))
-        fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-        st.plotly_chart(fig_corr, use_container_width=True)
+      ))
+      fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+      st.plotly_chart(fig_corr, use_container_width=True)
 
 # Ratio-grafiek met groene vulling
 with st.expander("📈 Ratio"):
