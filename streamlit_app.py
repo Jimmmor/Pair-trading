@@ -76,7 +76,6 @@ tickers = {
     "Floki (FLOKI)": "FLOKI-USD"
 }
 
-
 # Sidebar
 with st.sidebar:
     st.header("🔍 Kies een Coin Pair")
@@ -88,6 +87,13 @@ with st.sidebar:
     periode = st.selectbox("Periode", ["1mo", "3mo", "6mo", "1y"], index=2)
     interval = st.selectbox("Interval", ["1d"] if periode in ["6mo", "1y"] else ["1d", "1h", "30m"], index=0)
     corr_window = st.slider("Rolling correlatie window (dagen)", min_value=5, max_value=60, value=20, step=1)
+
+    st.markdown("---")
+    st.header("💰 Trade & Risico Parameters")
+    inleg = st.number_input("Inlegbedrag (€)", min_value=100, value=1000, step=100, help="Totaal kapitaal dat je wilt gebruiken.")
+    max_risico_pct = st.slider("Max verlies per trade (%)", min_value=0.1, max_value=20.0, value=2.0, step=0.1, help="Maximaal percentage verlies dat je per trade accepteert.")
+    winstdoel_pct = st.slider("Winstdoel (%)", min_value=0.1, max_value=50.0, value=5.0, step=0.1, help="Winstdoel als percentage.")
+    max_trade_pct = st.slider("Max % per trade van inleg", min_value=1, max_value=100, value=10, step=1, help="Hoeveel % van je inleg je maximaal per trade wilt inzetten.")
 
 coin1 = tickers[name1]
 coin2 = tickers[name2]
@@ -206,35 +212,6 @@ fig_z.add_trace(go.Scatter(x=df.index, y=[1]*len(df), mode='lines', name='Short 
 fig_z.add_trace(go.Scatter(x=df.index, y=[0]*len(df), mode='lines', name='Mean (0)', line=dict(dash='dot', color='gray')))
 fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
 st.plotly_chart(fig_z, use_container_width=True)
-st.plotly_chart(fig_z, use_container_width=True)
 
 # Analyse en aanbeveling
-st.subheader("🤖 Aanbeveling op basis van actuele data")
-
-latest_z = df["Z-score"].iloc[-1]
-latest_ratio = df["Ratio"].iloc[-1]
-latest_corr = df["Rolling Correlatie"].iloc[-1]
-
-def interpretatie():
-    actie = ""
-    if latest_z > 1:
-        actie = "📉 **Short** de spread — verwacht dat de ratio weer naar het gemiddelde daalt."
-    elif latest_z < -1:
-        actie = "📈 **Long** de spread — verwacht dat de ratio terugkeert naar het gemiddelde."
-    else:
-        actie = "⏸️ Geen actie — Z-score is binnen neutrale zone."
-
-    richting = "boven" if latest_ratio > mean_ratio else "onder"
-    correlatie = (
-        "sterke correlatie" if latest_corr > 0.7 else
-        "matige correlatie" if latest_corr > 0.4 else
-        "zwakke correlatie"
-    )
-
-    return f"""
-    - De **huidige Z-score is {latest_z:.2f}** → {actie}  
-    - De **ratio staat {richting} het gemiddelde ({mean_ratio:.4f})**.  
-    - De **rolling correlatie is {latest_corr:.2f}** → {correlatie}.  
-    """
-
-st.markdown(interpretatie())
+st.subheader("🤖 Aanbeveling op basis van actuele
