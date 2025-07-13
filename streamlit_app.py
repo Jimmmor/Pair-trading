@@ -164,6 +164,24 @@ spread_mean = df["Spread"].mean()
 spread_std = df["Spread"].std()
 df["Z-score"] = (df["Spread"] - spread_mean) / spread_std
 
+df["Ratio"] = df[coin1] / df[coin2]
+df["Rolling Correlatie"] = df[coin1].rolling(window=corr_window).corr(df[coin2])
+mean_ratio = df["Ratio"].mean()
+
+# Laatste waarden voor interpretatie en trade signals
+latest_z = df["Z-score"].iloc[-1]
+latest_ratio = df["Ratio"].iloc[-1]
+latest_corr = df["Rolling Correlatie"].iloc[-1]
+
+# Entry signalen
+entry_threshold_long = -1  # bv. z-score < -1 betekent long signaal
+entry_threshold_short = 1  # bv. z-score > 1 betekent short signaal
+
+zscore = latest_z  # actueel laatste z-score
+
+long_entry_signal = zscore < entry_threshold_long
+short_entry_signal = zscore > entry_threshold_short
+
 # Ratio en correlatie
 df["Ratio"] = df[coin1] / df[coin2]
 df["Rolling Correlatie"] = df[coin1].rolling(window=corr_window).corr(df[coin2])
