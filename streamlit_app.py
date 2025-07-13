@@ -206,7 +206,60 @@ fig_z.add_trace(go.Scatter(x=df.index, y=[1]*len(df), mode='lines', name='Short 
 fig_z.add_trace(go.Scatter(x=df.index, y=[0]*len(df), mode='lines', name='Mean (0)', line=dict(dash='dot', color='gray')))
 fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
 st.plotly_chart(fig_z, use_container_width=True)
+st.plotly_chart(fig_z, use_container_width=True)
 
+# ---------------------------
+# Trade Details & Parameters
+# ---------------------------
+st.subheader("🛠️ Trade Details & Parameters")
+
+# Input voor hefboom en fee
+leverage = st.number_input("Hefboom (leverage)", min_value=1, max_value=100, value=1, step=1)
+fee_pct = st.number_input("Trading fees (%)", min_value=0.0, max_value=5.0, value=0.1, step=0.01)
+
+# Basiswaarden uit de data
+entry_price = None
+exit_price = None
+stop_loss = None
+liquidation_price = None
+
+# Simpele regels voor trade op basis van Z-score en ratio
+latest_z = df["Z-score"].iloc[-1]
+latest_ratio = df["Ratio"].iloc[-1]
+mean_ratio = df["Ratio"].mean()
+
+if latest_z > 1:
+    # Short positie
+    entry_price = latest_ratio
+    exit_price = mean_ratio
+    stop_loss = entry_price + 0.5 * abs(entry_price - exit_price)
+elif latest_z < -1:
+    # Long positie
+    entry_price = latest_ratio
+    exit_price = mean_ratio
+    stop_loss = entry_price - 0.5 * abs(entry_price - exit_price)
+else:
+    st.info("⚠️ Geen trade-signaal op basis van huidige Z-score.")
+
+# Liquidatieprijs (vereenvoudigd)
+if entry_price is not None:
+    risk_perc = 0.8  # 80% risico voordat liquidatie
+    if latest_z > 1:  # short
+        liquidation_price = entry_price + risk_perc * abs(entry_price - stop_loss) * leverage
+    else:  # long
+        liquidation_price = entry_price - risk_perc * abs(entry_price - stop_loss) * leverage
+
+# Resultaten tonen
+if entry_price is not None:
+    st.markdown(f"""
+    **🔍 Trade Aanbeveling:**
+
+    - 📌 **Entry prijs** (ratio): `{entry_price:.4f}`  
+    - 🎯 **Exit prijs** (mean ratio): `{exit_price:.4f}`  
+    - ⛔ **Stoploss prijs**: `{stop_loss:.4f}`  
+    - ⚠️ **Liquidatieprijs** (bij hefboom `{leverage}x`): `{liquidation_price:.4f}`  
+    - 💸 **Verwachte fees per trade:** `{fee_pct:.2f}%`
+    """)
 # Analyse en aanbeveling
 st.subheader("🤖 Aanbeveling op basis van actuele data")
 
@@ -237,63 +290,3 @@ def interpretatie():
     """
 
 st.markdown(interpretatie())
-st.subheader("🛠️ Trade Details & Parameters")
-
-# Input voor hefboom en fee
-leverage = st.number_input("Hefboom (leverage)", min_value=1, max_value=100, value=1, step=1)
-fee_pct = st.number_input("Trading fees (%)", min_value=0.0, max_value=5.0, value=0.1, step=0.01)
-
-# Basiswaarden uit de data
-entry_price = None
-exit_price = None
-stop_loss = None
-liquidation_price = None
-
-# Simpele regels voor trade op basis van Z-score en ratio
-
-# Bijvoorbeeld:
-# - Entry: als Z-score > 1 (short) of < -1 (long)
-# - Exit: als Z-score terug naar 0
-# - Stoploss: iets buiten entry (bijv. 0.5 afstand van Z-score)
-# - Liquidatie: berekend op basis van hefboom (vereenvoudigd)
-
-latest_z = df["Z-score"].iloc[-1]
-latest_ratio = df["Ratio"].iloc[-1]
-mean_ratio = df["Ratio"].mean()
-
-if latest_z > 1:
-    # Short positie
-    entry_price = latest_ratio
-    exit_price = mean_ratio
-    stop_loss = entry_price + 0.5 * abs(entry_price - exit_price)
-elif latest_z < -1:
-    # Long positie
-    entry_price = latest_ratio
-    exit_price = mean_ratio
-    stop_loss = entry_price - 0.5 * abs(entry_price - exit_price)
-else:
-    st.info("Geen trade-signaal op basis van huidige Z-score.")
-
-# Liquidatieprijs (vereenvoudigd voorbeeld)
-# Stel liquidatie op 80% verlies van margin bij gegeven hefboom
-if entry_price is not None:
-    risk_perc = 0.8  # 80% risico voordat liquidatie
-    if latest_z > 1:  # short
-        liquidation_price = entry_price + risk_perc * abs(entry_price - stop_loss) * leverage
-    else:  # long
-        liquidation_price = entry_price - risk_perc * abs(entry_price - stop_loss) * leverage
-
-# Fees meerekenen in entry/exit kan ook, maar is optioneel (voor nu laten we het los)
-
-# Resultaten tonen
-if entry_price is not None:
-    st.markdown(f"""
-    **Trade Aanbeveling:**
-
-    - 📌 **Entry prijs** (ratio): {entry_price:.4f}  
-    - 🎯 **Exit prijs** (mean ratio): {exit_price:.4f}  
-    - ⛔ **Stoploss prijs**: {stop_loss:.4f}  
-    - ⚠️ **Liquidatieprijs** (bij hefboom {leverage}x): {liquidation_price:.4f}  
-    - 💸 **Verwachte fees:** {fee_pct}% per trade
-    """)
-
