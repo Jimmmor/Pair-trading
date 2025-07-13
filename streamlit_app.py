@@ -107,16 +107,32 @@ fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='line
 fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
 st.plotly_chart(fig_scatter, use_container_width=True)
 
-# Rolling correlatie
+# Rolling correlatie met groene vulling
 fig_corr = go.Figure()
-fig_corr.add_trace(go.Scatter(x=df.index, y=df["Rolling Correlatie"], mode='lines', name="Rolling Correlatie", line=dict(color='lightgreen')))
+fig_corr.add_trace(go.Scatter(
+    x=df.index,
+    y=df["Rolling Correlatie"],
+    mode='lines',
+    name="Rolling Correlatie",
+    line=dict(color='lightgreen'),
+    fill='tozeroy',
+    fillcolor='rgba(0,255,0,0.1)'
+))
 fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
 st.plotly_chart(fig_corr, use_container_width=True)
 
-# Ratio-grafiek
+# Ratio-grafiek met groene vulling
 with st.expander("📈 Ratio"):
     fig_ratio = go.Figure()
-    fig_ratio.add_trace(go.Scatter(x=df.index, y=df["Ratio"], mode='lines', name="Ratio", line=dict(color='red')))
+    fig_ratio.add_trace(go.Scatter(
+        x=df.index,
+        y=df["Ratio"],
+        mode='lines',
+        name="Ratio",
+        line=dict(color='red'),
+        fill='tozeroy',
+        fillcolor='rgba(0,255,0,0.1)'
+    ))
     fig_ratio.update_layout(title=f"Ratio {coin1}/{coin2}", xaxis_title="Datum", yaxis_title="Ratio", template="plotly_dark")
     st.plotly_chart(fig_ratio, use_container_width=True)
 
