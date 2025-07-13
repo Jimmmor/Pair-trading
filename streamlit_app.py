@@ -208,7 +208,7 @@ with st.expander("📊 Scatterplot"):
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Rolling correlatie met groene vulling
-    with st.expander("📊 Correlatie"):
+with st.expander("📊 Correlatie"):
     fig_corr = go.Figure()
     fig_corr.add_trace(go.Scatter(
         x=df.index,
