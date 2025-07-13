@@ -208,18 +208,19 @@ with st.expander("📊 Scatterplot"):
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Rolling correlatie met groene vulling
-fig_corr = go.Figure()
-fig_corr.add_trace(go.Scatter(
-    x=df.index,
-    y=df["Rolling Correlatie"],
-    mode='lines',
-    name="Rolling Correlatie",
-    line=dict(color='lightgreen'),
-    fill='tozeroy',
-    fillcolor='rgba(0,255,0,0.1)'
-))
-fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-st.plotly_chart(fig_corr, use_container_width=True)
+    with st.expander("📊 Correlatie"):
+    fig_corr = go.Figure()
+    fig_corr.add_trace(go.Scatter(
+        x=df.index,
+        y=df["Rolling Correlatie"],
+        mode='lines',
+        name="Rolling Correlatie",
+        line=dict(color='lightgreen'),
+        fill='tozeroy',
+        fillcolor='rgba(0,255,0,0.1)'
+        ))
+        fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+        st.plotly_chart(fig_corr, use_container_width=True)
 
 # Ratio-grafiek met groene vulling
 with st.expander("📈 Ratio"):
