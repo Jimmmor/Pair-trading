@@ -17,47 +17,65 @@ Gebruik dit voor pairs trading. Inclusief aanbeveling op basis van ratio, correl
 
 # Beschikbare tickers
 tickers = {
+    # Betaalmiddelen
     "Bitcoin (BTC)": "BTC-USD",
-    "Ethereum (ETH)": "ETH-USD",
-    "Solana (SOL)": "SOL-USD",
-    "Cardano (ADA)": "ADA-USD",
-    "Dogecoin (DOGE)": "DOGE-USD",
-    "Polkadot (DOT)": "DOT-USD",
-    "Chainlink (LINK)": "LINK-USD",
-    "Litecoin (LTC)": "LTC-USD",
-    "Avalanche (AVAX)": "AVAX-USD",
-    "Shiba Inu (SHIB)": "SHIB-USD",
-    "TRON (TRX)": "TRX-USD",
-    "Uniswap (UNI)": "UNI-USD",
-    "Cosmos (ATOM)": "ATOM-USD",
-    "Stellar (XLM)": "XLM-USD",
-    "VeChain (VET)": "VET-USD",
-    "NEAR Protocol (NEAR)": "NEAR-USD",
-    "Aptos (APT)": "APT-USD",
-    "Filecoin (FIL)": "FIL-USD",
-    "The Graph (GRT)": "GRT-USD",
-    "Algorand (ALGO)": "ALGO-USD",
-    "Tezos (XTZ)": "XTZ-USD",
-    "Hedera (HBAR)": "HBAR-USD",
-    "Fantom (FTM)": "FTM-USD",
-    "EOS (EOS)": "EOS-USD",
-    "Zcash (ZEC)": "ZEC-USD",
+    "Bitcoin Cash (BCH)": "BCH-USD",
     "Dash (DASH)": "DASH-USD",
-    "Chiliz (CHZ)": "CHZ-USD",
-    "THETA (THETA)": "THETA-USD",
-    "Internet Computer (ICP)": "ICP-USD",
-    "Arbitrum (ARB)": "ARB-USD",
-    "Optimism (OP)": "OP-USD",
-    "Injective (INJ)": "INJ-USD",
-    "SUI (SUI)": "SUI-USD",
-    "Lido DAO (LDO)": "LDO-USD",
+    "Dogecoin (DOGE)": "DOGE-USD",
+    "Litecoin (LTC)": "LTC-USD",
+    "Monero (XMR)": "XMR-USD",
+
+    # Smart Contract Platforms
+    "Algorand (ALGO)": "ALGO-USD",
+    "Avalanche (AVAX)": "AVAX-USD",
+    "Cardano (ADA)": "ADA-USD",
+    "Ethereum (ETH)": "ETH-USD",
+    "Fantom (FTM)": "FTM-USD",
+    "Polkadot (DOT)": "DOT-USD",
+    "Solana (SOL)": "SOL-USD",
+    "Tezos (XTZ)": "XTZ-USD",
+    "Toncoin (TON)": "TON-USD",
+
+    # DeFi Tokens
     "Aave (AAVE)": "AAVE-USD",
+    "Curve DAO Token (CRV)": "CRV-USD",
     "Maker (MKR)": "MKR-USD",
-    "Curve DAO (CRV)": "CRV-USD",
-    "1inch (1INCH)": "1INCH-USD",
+    "Uniswap (UNI)": "UNI-USD",
+    "SushiSwap (SUSHI)": "SUSHI-USD",
+    "Compound (COMP)": "COMP-USD",
+    "Lido DAO (LDO)": "LDO-USD",
+
+    # Stablecoins
+    "Tether (USDT)": "USDT-USD",
+    "USD Coin (USDC)": "USDC-USD",
+    "DAI (DAI)": "DAI-USD",
+    "TrueUSD (TUSD)": "TUSD-USD",
+
+    # Exchange Tokens
+    "Binance Coin (BNB)": "BNB-USD",
+    "Cronos (CRO)": "CRO-USD",
+    "KuCoin Token (KCS)": "KCS-USD",
+    "OKB (OKB)": "OKB-USD",
+    "Bitget Token (BGB)": "BGB-USD",
+
+    # Oracles & Data
+    "Chainlink (LINK)": "LINK-USD",
+    "Band Protocol (BAND)": "BAND-USD",
+    "The Graph (GRT)": "GRT-USD",
+
+    # NFT/Gaming/Metaverse
+    "Axie Infinity (AXS)": "AXS-USD",
+    "Decentraland (MANA)": "MANA-USD",
+    "The Sandbox (SAND)": "SAND-USD",
     "Gala (GALA)": "GALA-USD",
-    "Render (RNDR)": "RNDR-USD"
+    "Enjin Coin (ENJ)": "ENJ-USD",
+    
+    # Meme Coins
+    "Shiba Inu (SHIB)": "SHIB-USD",
+    "Pepe (PEPE)": "PEPE-USD",
+    "Floki (FLOKI)": "FLOKI-USD"
 }
+
 
 # Sidebar
 with st.sidebar:
