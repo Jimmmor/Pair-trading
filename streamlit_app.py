@@ -6,6 +6,31 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
 
+def calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread,
+                      z_entry_long=-2, z_exit=0, z_stoploss_long=-3,
+                      z_entry_short=2, z_stoploss_short=3,
+                      trade_type='long'):
+    if trade_type == 'long':
+        spread_entry = mean_spread + z_entry_long * std_spread
+        spread_exit = mean_spread + z_exit * std_spread
+        spread_stoploss = mean_spread + z_stoploss_long * std_spread
+    elif trade_type == 'short':
+        spread_entry = mean_spread + z_entry_short * std_spread
+        spread_exit = mean_spread + z_exit * std_spread
+        spread_stoploss = mean_spread + z_stoploss_short * std_spread
+    else:
+        raise ValueError("trade_type moet 'long' of 'short' zijn")
+
+    price1_entry = spread_entry + hedge_ratio * price2
+    price1_exit = spread_exit + hedge_ratio * price2
+    price1_stoploss = spread_stoploss + hedge_ratio * price2
+
+    return {
+        'entry': price1_entry,
+        'exit': price1_exit,
+        'stoploss': price1_stoploss
+    }
+
 # Pagina-instellingen
 st.set_page_config(layout="wide")
 st.title("📈 Pairs Trading Monitor")
@@ -213,12 +238,46 @@ fig_z.add_trace(go.Scatter(x=df.index, y=[0]*len(df), mode='lines', name='Mean (
 fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
 st.plotly_chart(fig_z, use_container_width=True)
 
+entry_threshold_long = -1  # bv. z-score < -1 betekent long signaal
+entry_threshold_short = 1  # bv. z-score > 1 betekent short signaal
+
+zscore = latest_z  # actueel laatste z-score
+
+long_entry_signal = zscore < entry_threshold_long
+short_entry_signal = zscore > entry_threshold_short
+
 # Analyse en aanbeveling
 st.subheader("🤖 Aanbeveling op basis van actuele data")
 
-latest_z = df["Z-score"].iloc[-1]
-latest_ratio = df["Ratio"].iloc[-1]
-latest_corr = df["Rolling Correlatie"].iloc[-1]
+price1 = df[coin1].iloc[-1]
+price2 = df[coin2].iloc[-1]
+hedge_ratio = beta  # gebruik beta als hedge ratio
+mean_spread = spread_mean
+std_spread = spread_std
+
+if long_entry_signal:
+    levels = calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread, trade_type='long')
+    st.markdown(f"""
+    ### 📈 Aanbeveling LONG
+    
+    - Instappen bij: **{levels['entry']:.2f}**  
+    - Exit bij: **{levels['exit']:.2f}**  
+    - Stoploss bij: **{levels['stoploss']:.2f}**  
+    """)
+
+elif short_entry_signal:
+    levels = calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread, trade_type='short')
+    st.markdown(f"""
+    ### 📉 Aanbeveling SHORT
+    
+    - Instappen bij: **{levels['entry']:.2f}**  
+    - Exit bij: **{levels['exit']:.2f}**  
+    - Stoploss bij: **{levels['stoploss']:.2f}**  
+    """)
+
+else:
+    st.write("Geen aanbeveling op dit moment.")
+
 
 def interpretatie():
     actie = ""
