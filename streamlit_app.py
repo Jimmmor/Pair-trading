@@ -214,4 +214,32 @@ fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yax
 st.plotly_chart(fig_z, use_container_width=True)
 
 # Analyse en aanbeveling
-st.subheader("🤖 Aanbeveling op basis van actuele
+st.subheader("🤖 Aanbeveling op basis van actuele data")
+
+latest_z = df["Z-score"].iloc[-1]
+latest_ratio = df["Ratio"].iloc[-1]
+latest_corr = df["Rolling Correlatie"].iloc[-1]
+
+def interpretatie():
+    actie = ""
+    if latest_z > 1:
+        actie = "📉 **Short** de spread — verwacht dat de ratio weer naar het gemiddelde daalt."
+    elif latest_z < -1:
+        actie = "📈 **Long** de spread — verwacht dat de ratio terugkeert naar het gemiddelde."
+    else:
+        actie = "⏸️ Geen actie — Z-score is binnen neutrale zone."
+
+    richting = "boven" if latest_ratio > mean_ratio else "onder"
+    correlatie = (
+        "sterke correlatie" if latest_corr > 0.7 else
+        "matige correlatie" if latest_corr > 0.4 else
+        "zwakke correlatie"
+    )
+
+    return f"""
+    - De **huidige Z-score is {latest_z:.2f}** → {actie}  
+    - De **ratio staat {richting} het gemiddelde ({mean_ratio:.4f})**.  
+    - De **rolling correlatie is {latest_corr:.2f}** → {correlatie}.  
+    """
+
+st.markdown(interpretatie())
