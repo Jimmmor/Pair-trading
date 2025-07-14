@@ -123,6 +123,8 @@ mean_ratio = df["Ratio"].mean()
 # Statistieken uitleg
 with st.expander("📊 Statistieken & Evaluatie"):
     st.markdown(f"""
+    Hier zie je de statistische evaluatie van de relatie tussen {coin1} en {coin2}:
+    
     - **Alpha (α): {alpha:.4f}** → Verwachte waarde van {coin1} als {coin2} nul is.
     - **Beta (β): {beta:.4f}** → Voor elke 1% verandering in {coin2}, beweegt {coin1} gemiddeld {beta:.2f}% mee.
     - **R²: {r2:.4f}** → {r2 * 100:.1f}% van de beweging in {coin1} wordt verklaard door {coin2}.
@@ -130,16 +132,20 @@ with st.expander("📊 Statistieken & Evaluatie"):
     - **Gemiddelde Spread: {spread_mean:.4f}** | σ: {spread_std:.4f}
     - **Gemiddelde Ratio {coin1}/{coin2}: {mean_ratio:.4f}**
     """)
+
 # Scatterplot + regressielijn
-with st.expander("📊 Scatterplot"):
+with st.expander("📈 Scatterplot & Regressielijn"):
+    st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
     fig_scatter = go.Figure()
     fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
     x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
     fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
     fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
     st.plotly_chart(fig_scatter, use_container_width=True)
-# Correlatie
-with st.expander("📊 Correlatie"):
+
+# Rolling correlatie
+with st.expander("📉 Rolling Correlatie"):
+    st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
     fig_corr = go.Figure()
     fig_corr.add_trace(go.Scatter(
         x=df.index,
@@ -149,11 +155,13 @@ with st.expander("📊 Correlatie"):
         line=dict(color='lightgreen'),
         fill='tozeroy',
         fillcolor='rgba(0,255,0,0.1)'
-))
-fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-st.plotly_chart(fig_corr, use_container_width=True)
-# Ratio-grafiek met groene vulling
+    ))
+    fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+# Ratio-grafiek
 with st.expander("📈 Ratio"):
+    st.markdown(f"De verhouding van {coin1}/{coin2} doorheen de tijd.")
     fig_ratio = go.Figure()
     fig_ratio.add_trace(go.Scatter(
         x=df.index,
@@ -166,8 +174,10 @@ with st.expander("📈 Ratio"):
     ))
     fig_ratio.update_layout(title=f"Ratio {coin1}/{coin2}", xaxis_title="Datum", yaxis_title="Ratio", template="plotly_dark")
     st.plotly_chart(fig_ratio, use_container_width=True)
+
 # Prijsvergelijking
-with st.expander("📈 Prijsvergelijking"):
+with st.expander("💹 Prijsvergelijking"):
+    st.markdown("Prijsontwikkeling van beide assets op dezelfde tijdlijn.")
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.index, y=df[coin1], name=coin1, yaxis="y1", line=dict(color="blue")))
     fig.add_trace(go.Scatter(x=df.index, y=df[coin2], name=coin2, yaxis="y2", line=dict(color="orange")))
