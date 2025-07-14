@@ -135,19 +135,19 @@ with st.expander("📊 Statistieken & Evaluatie"):
 
 # Scatterplot + regressielijn
 with st.expander("📈 Scatterplot & Regressielijn"):
-    st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
-    fig_scatter = go.Figure()
-    fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
-    x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
-    fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
-    fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
-    st.plotly_chart(fig_scatter, use_container_width=True)
+     st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
+     fig_scatter = go.Figure()
+     fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
+     x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
+     fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
+     fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
+     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Rolling correlatie
 with st.expander("📉 Rolling Correlatie"):
-    st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
-    fig_corr = go.Figure()
-    fig_corr.add_trace(go.Scatter(
+     st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
+     fig_corr = go.Figure()
+     fig_corr.add_trace(go.Scatter(
         x=df.index,
         y=df["Rolling Correlatie"],
         mode='lines',
@@ -155,10 +155,10 @@ with st.expander("📉 Rolling Correlatie"):
         line=dict(color='lightgreen'),
         fill='tozeroy',
         fillcolor='rgba(0,255,0,0.1)'
-    ))
-    fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-    st.plotly_chart(fig_corr, use_container_width=True)
-
+     ))
+     fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+     st.plotly_chart(fig_corr, use_container_width=True)
+ 
 # Ratio-grafiek
 with st.expander("📈 Ratio"):
     st.markdown(f"De verhouding van {coin1}/{coin2} doorheen de tijd.")
