@@ -135,13 +135,13 @@ with st.expander("📊 Statistieken & Evaluatie"):
 
 # Scatterplot + regressielijn
 with st.expander("📈 Scatterplot & Regressielijn"):
-     st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
-     fig_scatter = go.Figure()
-     fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
-     x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
-     fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
-     fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
-     st.plotly_chart(fig_scatter, use_container_width=True)
+    st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
+    fig_scatter = go.Figure()
+    fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
+    x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
+    fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
+    fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Rolling correlatie
 with st.expander("📉 Rolling Correlatie"):
