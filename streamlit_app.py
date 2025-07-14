@@ -132,8 +132,28 @@ with st.expander("📊 Statistieken & Evaluatie"):
     - **Gemiddelde Spread: {spread_mean:.4f}** | σ: {spread_std:.4f}
     - **Gemiddelde Ratio {coin1}/{coin2}: {mean_ratio:.4f}**
     """)
+with st.expander("📊 Prijsvergelijking"):
+    st.markdown("Hieronder zie je de prijsontwikkeling van beide assets.")
+    fig_price = go.Figure()
+    fig_price.add_trace(go.Scatter(x=df.index, y=df[coin1], name=coin1))
+    fig_price.add_trace(go.Scatter(x=df.index, y=df[coin2], name=coin2))
+    fig_price.update_layout(title="Prijsvergelijking", xaxis_title="Datum", yaxis_title="Prijs", template="plotly_dark")
+    st.plotly_chart(fig_price, use_container_width=True)
 
-# Scatterplot + regressielijn
+with st.expander("📉 Spread"):
+    st.markdown("De spread tussen de twee assets geeft het verschil in prijs aan.")
+    fig_spread = go.Figure()
+    fig_spread.add_trace(go.Scatter(x=df.index, y=df["Spread"], name="Spread"))
+    fig_spread.update_layout(title="Spread", xaxis_title="Datum", yaxis_title="Spread", template="plotly_dark")
+    st.plotly_chart(fig_spread, use_container_width=True)
+
+with st.expander("📈 Z-score"):
+    st.markdown("De Z-score laat zien hoe ver de huidige spread afwijkt van zijn gemiddelde.")
+    fig_zscore = go.Figure()
+    fig_zscore.add_trace(go.Scatter(x=df.index, y=df["Z-score"], name="Z-score", line=dict(color="orange")))
+    fig_zscore.update_layout(title="Z-score", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
+    st.plotly_chart(fig_zscore, use_container_width=True)
+
 with st.expander("📈 Scatterplot & Regressielijn"):
     st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
     fig_scatter = go.Figure()
@@ -143,11 +163,10 @@ with st.expander("📈 Scatterplot & Regressielijn"):
     fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-# Rolling correlatie
 with st.expander("📉 Rolling Correlatie"):
-     st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
-     fig_corr = go.Figure()
-     fig_corr.add_trace(go.Scatter(
+    st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
+    fig_corr = go.Figure()
+    fig_corr.add_trace(go.Scatter(
         x=df.index,
         y=df["Rolling Correlatie"],
         mode='lines',
@@ -155,46 +174,9 @@ with st.expander("📉 Rolling Correlatie"):
         line=dict(color='lightgreen'),
         fill='tozeroy',
         fillcolor='rgba(0,255,0,0.1)'
-     ))
-     fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-     st.plotly_chart(fig_corr, use_container_width=True)
- 
-# Ratio-grafiek
-with st.expander("📈 Ratio"):
-    st.markdown(f"De verhouding van {coin1}/{coin2} doorheen de tijd.")
-    fig_ratio = go.Figure()
-    fig_ratio.add_trace(go.Scatter(
-        x=df.index,
-        y=df["Ratio"],
-        mode='lines',
-        name="Ratio",
-        line=dict(color='red'),
-        fill='tozeroy',
-        fillcolor='rgba(0,255,0,0.1)'
     ))
-    fig_ratio.update_layout(title=f"Ratio {coin1}/{coin2}", xaxis_title="Datum", yaxis_title="Ratio", template="plotly_dark")
-    st.plotly_chart(fig_ratio, use_container_width=True)
-
-# Prijsvergelijking
-with st.expander("💹 Prijsvergelijking"):
-    st.markdown("Prijsontwikkeling van beide assets op dezelfde tijdlijn.")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df[coin1], name=coin1, yaxis="y1", line=dict(color="blue")))
-    fig.add_trace(go.Scatter(x=df.index, y=df[coin2], name=coin2, yaxis="y2", line=dict(color="orange")))
-    fig.update_layout(title="Prijsvergelijking", xaxis=dict(title="Datum"),
-                      yaxis=dict(title=coin1, side="left"),
-                      yaxis2=dict(title=coin2, overlaying="y", side="right"),
-                      template="plotly_dark")
-    st.plotly_chart(fig, use_container_width=True)
-# Z-score
-st.subheader("📉 Z-score en Entry-signalen")
-fig_z = go.Figure()
-fig_z.add_trace(go.Scatter(x=df.index, y=df["Z-score"], mode='lines', name="Z-score", line=dict(color="skyblue")))
-fig_z.add_trace(go.Scatter(x=df.index, y=[-1]*len(df), mode='lines', name='Long Entry', line=dict(dash='dash', color='green')))
-fig_z.add_trace(go.Scatter(x=df.index, y=[1]*len(df), mode='lines', name='Short Entry', line=dict(dash='dash', color='red')))
-fig_z.add_trace(go.Scatter(x=df.index, y=[0]*len(df), mode='lines', name='Mean (0)', line=dict(dash='dot', color='gray')))
-fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
-st.plotly_chart(fig_z, use_container_width=True)
+    fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+    st.plotly_chart(fig_corr, use_container_width=True)
 
 # Analyse en aanbeveling
 st.subheader("🤖 Aanbeveling op basis van actuele data")
