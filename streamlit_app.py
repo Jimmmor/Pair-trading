@@ -6,31 +6,6 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
 
-def calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread,
-                      z_entry_long=-2, z_exit=0, z_stoploss_long=-3,
-                      z_entry_short=2, z_stoploss_short=3,
-                      trade_type='long'):
-    if trade_type == 'long':
-        spread_entry = mean_spread + z_entry_long * std_spread
-        spread_exit = mean_spread + z_exit * std_spread
-        spread_stoploss = mean_spread + z_stoploss_long * std_spread
-    elif trade_type == 'short':
-        spread_entry = mean_spread + z_entry_short * std_spread
-        spread_exit = mean_spread + z_exit * std_spread
-        spread_stoploss = mean_spread + z_stoploss_short * std_spread
-    else:
-        raise ValueError("trade_type moet 'long' of 'short' zijn")
-
-    price1_entry = spread_entry + hedge_ratio * price2
-    price1_exit = spread_exit + hedge_ratio * price2
-    price1_stoploss = spread_stoploss + hedge_ratio * price2
-
-    return {
-        'entry': price1_entry,
-        'exit': price1_exit,
-        'stoploss': price1_stoploss
-    }
-
 # Pagina-instellingen
 st.set_page_config(layout="wide")
 st.title("📈 Pairs Trading Monitor")
@@ -42,63 +17,46 @@ Gebruik dit voor pairs trading. Inclusief aanbeveling op basis van ratio, correl
 
 # Beschikbare tickers
 tickers = {
-    # Betaalmiddelen
     "Bitcoin (BTC)": "BTC-USD",
-    "Bitcoin Cash (BCH)": "BCH-USD",
-    "Dash (DASH)": "DASH-USD",
-    "Dogecoin (DOGE)": "DOGE-USD",
-    "Litecoin (LTC)": "LTC-USD",
-    "Monero (XMR)": "XMR-USD",
-
-    # Smart Contract Platforms
-    "Algorand (ALGO)": "ALGO-USD",
-    "Avalanche (AVAX)": "AVAX-USD",
-    "Cardano (ADA)": "ADA-USD",
     "Ethereum (ETH)": "ETH-USD",
-    "Fantom (FTM)": "FTM-USD",
-    "Polkadot (DOT)": "DOT-USD",
     "Solana (SOL)": "SOL-USD",
-    "Tezos (XTZ)": "XTZ-USD",
-    "Toncoin (TON)": "TON-USD",
-
-    # DeFi Tokens
-    "Aave (AAVE)": "AAVE-USD",
-    "Curve DAO Token (CRV)": "CRV-USD",
-    "Maker (MKR)": "MKR-USD",
-    "Uniswap (UNI)": "UNI-USD",
-    "SushiSwap (SUSHI)": "SUSHI-USD",
-    "Compound (COMP)": "COMP-USD",
-    "Lido DAO (LDO)": "LDO-USD",
-
-    # Stablecoins
-    "Tether (USDT)": "USDT-USD",
-    "USD Coin (USDC)": "USDC-USD",
-    "DAI (DAI)": "DAI-USD",
-    "TrueUSD (TUSD)": "TUSD-USD",
-
-    # Exchange Tokens
-    "Binance Coin (BNB)": "BNB-USD",
-    "Cronos (CRO)": "CRO-USD",
-    "KuCoin Token (KCS)": "KCS-USD",
-    "OKB (OKB)": "OKB-USD",
-    "Bitget Token (BGB)": "BGB-USD",
-
-    # Oracles & Data
+    "Cardano (ADA)": "ADA-USD",
+    "Dogecoin (DOGE)": "DOGE-USD",
+    "Polkadot (DOT)": "DOT-USD",
     "Chainlink (LINK)": "LINK-USD",
-    "Band Protocol (BAND)": "BAND-USD",
-    "The Graph (GRT)": "GRT-USD",
-
-    # NFT/Gaming/Metaverse
-    "Axie Infinity (AXS)": "AXS-USD",
-    "Decentraland (MANA)": "MANA-USD",
-    "The Sandbox (SAND)": "SAND-USD",
-    "Gala (GALA)": "GALA-USD",
-    "Enjin Coin (ENJ)": "ENJ-USD",
-    
-    # Meme Coins
+    "Litecoin (LTC)": "LTC-USD",
+    "Avalanche (AVAX)": "AVAX-USD",
     "Shiba Inu (SHIB)": "SHIB-USD",
-    "Pepe (PEPE)": "PEPE-USD",
-    "Floki (FLOKI)": "FLOKI-USD"
+    "TRON (TRX)": "TRX-USD",
+    "Uniswap (UNI)": "UNI-USD",
+    "Cosmos (ATOM)": "ATOM-USD",
+    "Stellar (XLM)": "XLM-USD",
+    "VeChain (VET)": "VET-USD",
+    "NEAR Protocol (NEAR)": "NEAR-USD",
+    "Aptos (APT)": "APT-USD",
+    "Filecoin (FIL)": "FIL-USD",
+    "The Graph (GRT)": "GRT-USD",
+    "Algorand (ALGO)": "ALGO-USD",
+    "Tezos (XTZ)": "XTZ-USD",
+    "Hedera (HBAR)": "HBAR-USD",
+    "Fantom (FTM)": "FTM-USD",
+    "EOS (EOS)": "EOS-USD",
+    "Zcash (ZEC)": "ZEC-USD",
+    "Dash (DASH)": "DASH-USD",
+    "Chiliz (CHZ)": "CHZ-USD",
+    "THETA (THETA)": "THETA-USD",
+    "Internet Computer (ICP)": "ICP-USD",
+    "Arbitrum (ARB)": "ARB-USD",
+    "Optimism (OP)": "OP-USD",
+    "Injective (INJ)": "INJ-USD",
+    "SUI (SUI)": "SUI-USD",
+    "Lido DAO (LDO)": "LDO-USD",
+    "Aave (AAVE)": "AAVE-USD",
+    "Maker (MKR)": "MKR-USD",
+    "Curve DAO (CRV)": "CRV-USD",
+    "1inch (1INCH)": "1INCH-USD",
+    "Gala (GALA)": "GALA-USD",
+    "Render (RNDR)": "RNDR-USD"
 }
 
 # Sidebar
@@ -112,13 +70,6 @@ with st.sidebar:
     periode = st.selectbox("Periode", ["1mo", "3mo", "6mo", "1y"], index=2)
     interval = st.selectbox("Interval", ["1d"] if periode in ["6mo", "1y"] else ["1d", "1h", "30m"], index=0)
     corr_window = st.slider("Rolling correlatie window (dagen)", min_value=5, max_value=60, value=20, step=1)
-
-    st.markdown("---")
-    st.header("💰 Trade & Risico Parameters")
-    inleg = st.number_input("Inlegbedrag (€)", min_value=100, value=1000, step=100, help="Totaal kapitaal dat je wilt gebruiken.")
-    max_risico_pct = st.slider("Max verlies per trade (%)", min_value=0.1, max_value=20.0, value=2.0, step=0.1, help="Maximaal percentage verlies dat je per trade accepteert.")
-    winstdoel_pct = st.slider("Winstdoel (%)", min_value=0.1, max_value=50.0, value=5.0, step=0.1, help="Winstdoel als percentage.")
-    max_trade_pct = st.slider("Max % per trade van inleg", min_value=1, max_value=100, value=10, step=1, help="Hoeveel % van je inleg je maximaal per trade wilt inzetten.")
 
 coin1 = tickers[name1]
 coin2 = tickers[name2]
@@ -164,24 +115,6 @@ spread_mean = df["Spread"].mean()
 spread_std = df["Spread"].std()
 df["Z-score"] = (df["Spread"] - spread_mean) / spread_std
 
-df["Ratio"] = df[coin1] / df[coin2]
-df["Rolling Correlatie"] = df[coin1].rolling(window=corr_window).corr(df[coin2])
-mean_ratio = df["Ratio"].mean()
-
-# Laatste waarden voor interpretatie en trade signals
-latest_z = df["Z-score"].iloc[-1]
-latest_ratio = df["Ratio"].iloc[-1]
-latest_corr = df["Rolling Correlatie"].iloc[-1]
-
-# Entry signalen
-entry_threshold_long = -1  # bv. z-score < -1 betekent long signaal
-entry_threshold_short = 1  # bv. z-score > 1 betekent short signaal
-
-zscore = latest_z  # actueel laatste z-score
-
-long_entry_signal = zscore < entry_threshold_long
-short_entry_signal = zscore > entry_threshold_short
-
 # Ratio en correlatie
 df["Ratio"] = df[coin1] / df[coin2]
 df["Rolling Correlatie"] = df[coin1].rolling(window=corr_window).corr(df[coin2])
@@ -199,28 +132,26 @@ with st.expander("📊 Statistieken & Evaluatie"):
     """)
 
 # Scatterplot + regressielijn
-with st.expander("📊 Scatterplot"):
-    fig_scatter = go.Figure()
-    fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
-    x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
-    fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
-    fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
-    st.plotly_chart(fig_scatter, use_container_width=True)
+fig_scatter = go.Figure()
+fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
+x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
+fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
+fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
+st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Rolling correlatie met groene vulling
-with st.expander("📊 Correlatie"):
-    fig_corr = go.Figure()
-    fig_corr.add_trace(go.Scatter(
-        x=df.index,
-        y=df["Rolling Correlatie"],
-        mode='lines',
-        name="Rolling Correlatie",
-        line=dict(color='lightgreen'),
-        fill='tozeroy',
-        fillcolor='rgba(0,255,0,0.1)'
-    ))
-    fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-    st.plotly_chart(fig_corr, use_container_width=True)
+fig_corr = go.Figure()
+fig_corr.add_trace(go.Scatter(
+    x=df.index,
+    y=df["Rolling Correlatie"],
+    mode='lines',
+    name="Rolling Correlatie",
+    line=dict(color='lightgreen'),
+    fill='tozeroy',
+    fillcolor='rgba(0,255,0,0.1)'
+))
+fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
+st.plotly_chart(fig_corr, use_container_width=True)
 
 # Ratio-grafiek met groene vulling
 with st.expander("📈 Ratio"):
@@ -258,46 +189,12 @@ fig_z.add_trace(go.Scatter(x=df.index, y=[0]*len(df), mode='lines', name='Mean (
 fig_z.update_layout(title="Z-score met Entry Drempels", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
 st.plotly_chart(fig_z, use_container_width=True)
 
-entry_threshold_long = -1  # bv. z-score < -1 betekent long signaal
-entry_threshold_short = 1  # bv. z-score > 1 betekent short signaal
-
-zscore = latest_z  # actueel laatste z-score
-
-long_entry_signal = zscore < entry_threshold_long
-short_entry_signal = zscore > entry_threshold_short
-
 # Analyse en aanbeveling
 st.subheader("🤖 Aanbeveling op basis van actuele data")
 
-price1 = df[coin1].iloc[-1]
-price2 = df[coin2].iloc[-1]
-hedge_ratio = beta  # gebruik beta als hedge ratio
-mean_spread = spread_mean
-std_spread = spread_std
-
-if long_entry_signal:
-    levels = calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread, trade_type='long')
-    st.markdown(f"""
-    ### 📈 Aanbeveling LONG
-    
-    - Instappen bij: **{levels['entry']:.2f}**  
-    - Exit bij: **{levels['exit']:.2f}**  
-    - Stoploss bij: **{levels['stoploss']:.2f}**  
-    """)
-
-elif short_entry_signal:
-    levels = calc_trade_levels(price1, price2, hedge_ratio, mean_spread, std_spread, trade_type='short')
-    st.markdown(f"""
-    ### 📉 Aanbeveling SHORT
-    
-    - Instappen bij: **{levels['entry']:.2f}**  
-    - Exit bij: **{levels['exit']:.2f}**  
-    - Stoploss bij: **{levels['stoploss']:.2f}**  
-    """)
-
-else:
-    st.write("Geen aanbeveling op dit moment.")
-
+latest_z = df["Z-score"].iloc[-1]
+latest_ratio = df["Ratio"].iloc[-1]
+latest_corr = df["Rolling Correlatie"].iloc[-1]
 
 def interpretatie():
     actie = ""
