@@ -73,120 +73,45 @@ with st.sidebar:
 coin1 = tickers[name1]
 coin2 = tickers[name2]
 
-# Data ophalen
+# Data ophalen met caching
 @st.cache_data
 def load_data(ticker, period, interval):
     try:
-        return yf.download(ticker, period=period, interval=interval)
-    except:
+        df = yf.download(ticker, period=period, interval=interval)
+        return df
+    except Exception as e:
+        st.error(f"Fout bij ophalen data voor {ticker}: {e}")
         return pd.DataFrame()
 
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
 
-# Check of data binnen is
 if data1.empty or data2.empty:
     st.error("Geen data beschikbaar voor één of beide coins. Probeer een andere combinatie of periode.")
     st.stop()
+# === Sidebar uitbreiden met thresholds voor z-score trade signalen ===
+with st.sidebar:
+    zscore_entry_threshold = st.number_input(
+        "Entry Z-score threshold", min_value=0.5, max_value=5.0, value=2.0, step=0.1
+    )
+    zscore_exit_threshold = st.number_input(
+        "Exit Z-score threshold", min_value=0.0, max_value=2.0, value=0.5, step=0.1
+    )
 
-# Sluitingsprijzen extraheren
-prices1 = data1['Close']
-prices2 = data2['Close']
+# Start- en einddatum voor samenvatting bepalen
+start_date = data1.index.min().strftime("%Y-%m-%d") if not data1.empty else "N/A"
+end_date = data1.index.max().strftime("%Y-%m-%d") if not data1.empty else "N/A"# === Trade signalen gebaseerd op z-score thresholds ===
 
-# Combineer in dataframe met inner join op de index
-df = pd.DataFrame({'price1': prices1, 'price2': prices2}).dropna()
-
-
-
-# Linear regression price2 ~ price1 (beta * price1 + alpha)
-X = df[['price1']].values
-y = df['price2'].values
-model = LinearRegression().fit(X, y)
-beta = model.coef_[0]
-alpha = model.intercept_
-r2 = model.score(X, y)
-corr = np.corrcoef(df['price1'], df['price2'])[0, 1]
-
-# Spread berekenen: residuals van de regressie
-df['spread'] = df['price2'] - (beta * df['price1'] + alpha)
-
-# Spread stats
-spread_mean = df['spread'].mean()
-spread_std = df['spread'].std()
-
-# Z-score van spread
-df['zscore'] = (df['spread'] - spread_mean) / spread_std
-
-# Rolling correlatie over gekozen window
-df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
-
-# Plot 1: Prijzen van beide coins
-fig_prices = go.Figure()
-fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], mode='lines', name=name1))
-fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], mode='lines', name=name2))
-fig_prices.update_layout(title="Sluitingsprijzen", yaxis_title="Prijs (USD)", xaxis_title="Datum")
-
-# Plot 2: Spread en Z-score
-fig_spread = go.Figure()
-fig_spread.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
-fig_spread.add_trace(go.Scatter(x=df.index, y=df['zscore'], mode='lines', name='Z-score', yaxis='y2'))
-
-fig_spread.update_layout(
-    title="Spread en Z-score",
-    yaxis=dict(title='Spread', side='left'),
-    yaxis2=dict(title='Z-score', overlaying='y', side='right'),
-    xaxis_title="Datum"
-)
-
-# Plot 3: Rolling correlatie
-fig_corr = go.Figure()
-fig_corr.add_trace(go.Scatter(x=df.index, y=df['rolling_corr'], mode='lines', name='Rolling correlatie'))
-fig_corr.update_layout(
-    title=f"Rolling correlatie (window={corr_window} dagen)",
-    yaxis_title="Correlatie",
-    xaxis_title="Datum",
-    yaxis=dict(range=[-1,1])
-)
-
-# Resultaten en statistieken tonen
-st.subheader("📊 Statistieken")
-st.write(f"**Regressie formule:** {name2} = {beta:.4f} × {name1} + {alpha:.4f}")
-st.write(f"**R²:** {r2:.4f}")
-st.write(f"**Pearson correlatie:** {corr:.4f}")
-st.write(f"**Gemiddelde spread:** {spread_mean:.4f}")
-st.write(f"**Standaarddeviatie spread:** {spread_std:.4f}")
-
-# Interpretatie aanbeveling
-st.subheader("💡 Trading aanbeveling")
-if abs(corr) < 0.7:
-    st.warning("Let op: correlatie tussen coins is laag, pairs trading mogelijk minder betrouwbaar.")
-if r2 < 0.6:
-    st.warning("Let op: R² is laag, regressiefit is mogelijk niet sterk.")
-if abs(df['zscore'].iloc[-1]) > 2:
-    direction = "short" if df['zscore'].iloc[-1] > 2 else "long"
-    st.success(f"Z-score extreem hoog ({df['zscore'].iloc[-1]:.2f}): Overweeg een **{direction} positie** op de spread.")
-else:
-    st.info(f"Z-score normaal ({df['zscore'].iloc[-1]:.2f}): Geen directe trade signalen.")
-
-# Grafieken tonen
-st.plotly_chart(fig_prices, use_container_width=True)
-st.plotly_chart(fig_spread, use_container_width=True)
-st.plotly_chart(fig_corr, use_container_width=True)
-# === Trade signalen gebaseerd op z-score thresholds ===
-
-entry_threshold = zscore_entry_threshold
-exit_threshold = zscore_exit_threshold
-
-# Signalen: long spread = zscore < -entry_threshold, short spread = zscore > entry_threshold
-df['long_entry'] = df['zscore'] < -entry_threshold
-df['short_entry'] = df['zscore'] > entry_threshold
-df['exit'] = df['zscore'].abs() < exit_threshold
+# Signalen: long entry als zscore < -entry_threshold, short entry als zscore > entry_threshold
+df['long_entry'] = df['zscore'] < -zscore_entry_threshold
+df['short_entry'] = df['zscore'] > zscore_entry_threshold
+df['exit'] = df['zscore'].abs() < zscore_exit_threshold
 
 # Huidige positie bepalen (laatste data punt)
 if df['long_entry'].iloc[-1]:
-    current_position = "Long Spread (koop coin2, verkoop coin1)"
+    current_position = f"Long Spread (koop {name2}, verkoop {name1})"
 elif df['short_entry'].iloc[-1]:
-    current_position = "Short Spread (verkoop coin2, koop coin1)"
+    current_position = f"Short Spread (verkoop {name2}, koop {name1})"
 elif df['exit'].iloc[-1]:
     current_position = "Exit positie (geen trade)"
 else:
@@ -198,16 +123,16 @@ st.write(f"**Signaal:** {current_position}")
 
 # === Entry, exit, stoploss niveaus visualiseren ===
 
-# Entry lijnen
-entry_long_level = -entry_threshold * spread_std + spread_mean
-entry_short_level = entry_threshold * spread_std + spread_mean
-exit_level_pos = exit_threshold * spread_std + spread_mean
-exit_level_neg = -exit_threshold * spread_std + spread_mean
+# Entry lijnen in spread termen
+entry_long_level = -zscore_entry_threshold * spread_std + spread_mean
+entry_short_level = zscore_entry_threshold * spread_std + spread_mean
+exit_level_pos = zscore_exit_threshold * spread_std + spread_mean
+exit_level_neg = -zscore_exit_threshold * spread_std + spread_mean
 
 fig_signal = go.Figure()
 fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
 
-# Entry en exit lijnen
+# Entry en exit lijnen tekenen
 fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), annotation_text='Long Entry', annotation_position='bottom left')
 fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), annotation_text='Short Entry', annotation_position='top left')
 fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), annotation_text='Exit', annotation_position='top right')
@@ -217,34 +142,55 @@ fig_signal.update_layout(title="Spread met Entry en Exit niveaus", yaxis_title="
 
 st.plotly_chart(fig_signal, use_container_width=True)
 
-# === Stoploss level (optioneel) ===
-stoploss_pct = 0.05  # bv. 5% stoploss van spread (kan aanpasbaar gemaakt worden)
+# === Stoploss niveau (voorbeeld) ===
+stoploss_pct = 0.05  # 5% stoploss van spread, aanpasbaar
 
-# Bijvoorbeeld stoploss niveaus +/- 5% van spread mean
 stoploss_upper = spread_mean * (1 + stoploss_pct)
 stoploss_lower = spread_mean * (1 - stoploss_pct)
 
 st.subheader("🛑 Stoploss niveau (voorbeeld)")
 st.write(f"Stoploss boven: {stoploss_upper:.4f}")
 st.write(f"Stoploss onder: {stoploss_lower:.4f}")
+# === Samenvatting en toelichting ===
 
-# === Samenvatting en advies ===
-st.subheader("📈 Samenvatting en advies")
+st.header("📊 Samenvatting van de pairs trading analyse")
 
 st.markdown(f"""
-- **Coin pair:** {name1} & {name2}  
-- **Periode:** {start_date} tot {end_date}  
-- **Correlatie:** {corr:.2f}  
-- **R²:** {r2:.2f}  
-- **Laatste z-score:** {df['zscore'].iloc[-1]:.2f}  
+- **Asset 1:** {name1}  
+- **Asset 2:** {name2}  
+- **Periode:** {df.index.min().date()} tot {df.index.max().date()}  
+- **Data punten:** {len(df)}  
 
-**Interpretatie:**
-- Bij een z-score > ±{entry_threshold} wordt een trade signaal gegeven (long/short spread).  
-- Bij een z-score binnen ±{exit_threshold} wordt aangeraden positie te sluiten.  
-- Wees voorzichtig bij een lage correlatie (<0.7) of lage R² (<0.6), de betrouwbaarheid van de trade neemt af.
+**Regressie resultaten:**  
+- Alpha: {alpha:.6f}  
+- Beta: {beta:.6f}  
+- R²: {r_squared:.4f}  
 
-**Huidig signaal:** {current_position}  
+**Spread statistieken:**  
+- Gemiddelde spread: {spread_mean:.4f}  
+- Standaarddeviatie spread: {spread_std:.4f}  
+
+**Laatste z-score:** {df['zscore'].iloc[-1]:.2f}
+
 """)
+
+st.header("💡 Mogelijke uitbreidingen")
+
+st.markdown("""
+- Voeg dynamische parameters toe via sliders, bijvoorbeeld z-score thresholds en stoploss percentage.  
+- Implementeer backtesting van de strategy om performance over tijd te bekijken.  
+- Gebruik real-time data feeds voor live trading signalen.  
+- Voeg meerdere paren toe met rangschikking op basis van cointegratie.  
+- Integreer een ordermanagement systeem (via broker API).  
+- Visualiseer winst/verlies scenario's en risicomanagement.  
+""")
+
+st.write("### Bedankt voor het gebruiken van deze pairs trading tool!")
+
+# Optioneel: mogelijkheid om data te exporteren
+if st.button("Exporteer analyse naar CSV"):
+    csv = df.to_csv(index=True)
+    st.download_button(label="Download CSV", data=csv, file_name="pairs_trading_analysis.csv", mime='text/csv')
 
 
 
