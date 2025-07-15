@@ -93,7 +93,18 @@ prices1 = data1['Close']
 prices2 = data2['Close']
 
 # Op gelijke lengte brengen (inner join op index)
+# Functie om data op te halen en om te zetten naar een Series
+def get_data(ticker):
+    prices = all_data[ticker]
+    return pd.Series(prices, name=ticker)
+
+# Haal de correcte Series op voor beide assets
+prices1 = get_data(ticker1)
+prices2 = get_data(ticker2)
+
+# Combineer ze in een dataframe
 df = pd.DataFrame({'price1': prices1, 'price2': prices2}).dropna()
+
 
 # Linear regression price2 ~ price1 (beta * price1 + alpha)
 X = df[['price1']].values
