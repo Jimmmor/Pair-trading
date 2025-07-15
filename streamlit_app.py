@@ -96,13 +96,31 @@ if data1.empty or data2.empty:
     st.stop()
 
 # Data verwerken - sluitprijzen gebruiken
-df1 = data1['Close'].dropna()
-df2 = data2['Close'].dropna()
+# Controleer of data multi-column is (yfinance kan soms multi-level columns geven)
+if isinstance(data1.columns, pd.MultiIndex):
+    df1 = data1['Close'].iloc[:, 0].dropna()  # Neem eerste kolom als er meerdere zijn
+    df2 = data2['Close'].iloc[:, 0].dropna()
+else:
+    df1 = data1['Close'].dropna()
+    df2 = data2['Close'].dropna()
 
-# Combineer data op basis van datum
+# Debug info
+st.write(f"Data1 shape: {data1.shape}, Data2 shape: {data2.shape}")
+st.write(f"df1 type: {type(df1)}, df2 type: {type(df2)}")
+
+# Zorg ervoor dat we Series hebben
+if not isinstance(df1, pd.Series):
+    df1 = pd.Series(df1)
+if not isinstance(df2, pd.Series):
+    df2 = pd.Series(df2)
+
+# Combineer data op basis van datum - gebruik align om indexen te matchen
+df1_aligned, df2_aligned = df1.align(df2, join='inner')
+
+# Maak DataFrame
 df = pd.DataFrame({
-    'price1': df1,
-    'price2': df2
+    'price1': df1_aligned,
+    'price2': df2_aligned
 }).dropna()
 
 if df.empty:
