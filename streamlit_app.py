@@ -83,27 +83,19 @@ def load_data(ticker, period, interval):
 
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
+
 # Check of data binnen is
 if data1.empty or data2.empty:
     st.error("Geen data beschikbaar voor één of beide coins. Probeer een andere combinatie of periode.")
     st.stop()
 
-# Data prijzen - sluitingsprijzen gebruiken
+# Sluitingsprijzen extraheren
 prices1 = data1['Close']
 prices2 = data2['Close']
 
-# Op gelijke lengte brengen (inner join op index)
-# Functie om data op te halen en om te zetten naar een Series
-def get_data(ticker):
-    prices = all_data[ticker]
-    return pd.Series(prices, name=ticker)
-
-# Haal de correcte Series op voor beide assets
-prices1 = get_data(ticker1)
-prices2 = get_data(ticker2)
-
-# Combineer ze in een dataframe
+# Combineer in dataframe met inner join op de index
 df = pd.DataFrame({'price1': prices1, 'price2': prices2}).dropna()
+
 
 
 # Linear regression price2 ~ price1 (beta * price1 + alpha)
