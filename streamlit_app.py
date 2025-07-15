@@ -264,11 +264,196 @@ with col2:
     fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
     st.plotly_chart(fig_zscore, use_container_width=True)
 
-# Rolling correlatie grafiek
+# Rolling correlatie grafiek met groen transparant oppervlak
 fig_corr = go.Figure()
-fig_corr.add_trace(go.Scatter(x=df.index, y=df['rolling_corr'], name='Rolling Correlatie', line=dict(color='orange')))
-fig_corr.update_layout(title="Rolling Correlatie", yaxis_title="Correlatie", xaxis_title="Datum")
+
+# Voeg het groene transparante oppervlak toe
+fig_corr.add_trace(go.Scatter(
+    x=df.index, 
+    y=df['rolling_corr'], 
+    fill='tozeroy',
+    fillcolor='rgba(0, 255, 0, 0.3)',  # Groen transparant
+    line=dict(color='orange', width=2),
+    name='Rolling Correlatie'
+))
+
+fig_corr.update_layout(
+    title="Rolling Correlatie met Transparant Oppervlak", 
+    yaxis_title="Correlatie", 
+    xaxis_title="Datum",
+    yaxis=dict(range=[-1, 1])  # Correlatie is altijd tussen -1 en 1
+)
 st.plotly_chart(fig_corr, use_container_width=True)
+
+# === NIEUWE SECTIE: Correlatie Analyse ===
+st.header("📊 Correlatie Analyse")
+
+# Bereken returns voor scatter plot
+df['returns1'] = df['price1'].pct_change()
+df['returns2'] = df['price2'].pct_change()
+
+# Verwijder NaN waarden
+returns_clean = df[['returns1', 'returns2']].dropna()
+
+col1, col2 = st.columns(2)
+
+with col1:
+    # Scatter plot van returns (zoals in je afbeelding)
+    fig_scatter = go.Figure()
+    
+    # Scatter plot
+    fig_scatter.add_trace(go.Scatter(
+        x=returns_clean['returns1'] * 100,  # Converteer naar percentages
+        y=returns_clean['returns2'] * 100,
+        mode='markers',
+        marker=dict(
+            color='purple',
+            size=8,
+            opacity=0.6
+        ),
+        name='Daily Returns',
+        showlegend=False
+    ))
+    
+    # Voeg regressielijn toe
+    from sklearn.linear_model import LinearRegression
+    X_scatter = returns_clean['returns1'].values.reshape(-1, 1)
+    y_scatter = returns_clean['returns2'].values
+    
+    model_scatter = LinearRegression()
+    model_scatter.fit(X_scatter, y_scatter)
+    
+    # Regressielijn data
+    x_line = np.linspace(returns_clean['returns1'].min(), returns_clean['returns1'].max(), 100)
+    y_line = model_scatter.predict(x_line.reshape(-1, 1))
+    
+    fig_scatter.add_trace(go.Scatter(
+        x=x_line * 100,
+        y=y_line * 100,
+        mode='lines',
+        line=dict(color='yellow', width=3),
+        name=f'y = {model_scatter.coef_[0]:.3f}x + {model_scatter.intercept_:.3f}',
+        showlegend=False
+    ))
+    
+    # Voeg regressie vergelijking toe als annotatie
+    fig_scatter.add_annotation(
+        x=0.05, y=0.95,
+        xref='paper', yref='paper',
+        text=f'y = {model_scatter.coef_[0]:.3f}x + {model_scatter.intercept_:.6f}',
+        showarrow=False,
+        font=dict(size=12, color='yellow'),
+        bgcolor='rgba(0,0,0,0.5)',
+        bordercolor='yellow',
+        borderwidth=1
+    )
+    
+    fig_scatter.update_layout(
+        title="Returns Correlatie Scatter Plot",
+        xaxis_title=f"{name1} Returns (%)",
+        yaxis_title=f"{name2} Returns (%)",
+        plot_bgcolor='black',
+        paper_bgcolor='black',
+        font=dict(color='white')
+    )
+    
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+with col2:
+    # Boxplot van correlaties
+    fig_box = go.Figure()
+    
+    # Bereken rolling correlatie voor verschillende windows
+    correlations_data = []
+    windows = [10, 20, 30, 60]
+    
+    for window in windows:
+        if len(df) >= window:
+            rolling_corr = df['price1'].rolling(window=window).corr(df['price2']).dropna()
+            correlations_data.extend([(window, corr) for corr in rolling_corr])
+    
+    # Converteer naar DataFrame voor boxplot
+    corr_df = pd.DataFrame(correlations_data, columns=['Window', 'Correlation'])
+    
+    for window in windows:
+        window_data = corr_df[corr_df['Window'] == window]['Correlation']
+        if len(window_data) > 0:
+            fig_box.add_trace(go.Box(
+                y=window_data,
+                name=f'{window}d window',
+                boxpoints='outliers'
+            ))
+    
+    fig_box.update_layout(
+        title="Correlatie Distributie (Boxplot)",
+        yaxis_title="Correlatie",
+        xaxis_title="Rolling Window"
+    )
+    
+    st.plotly_chart(fig_box, use_container_width=True)
+
+# Correlatie statistieken tabel
+st.subheader("📈 Correlatie Statistieken")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Pearson Correlatie", f"{pearson_corr:.4f}")
+    st.metric("Beta (β)", f"{beta:.4f}")
+    st.metric("R-squared", f"{r_squared:.4f}")
+
+with col2:
+    current_rolling_corr = df['rolling_corr'].iloc[-1]
+    avg_rolling_corr = df['rolling_corr'].mean()
+    st.metric("Huidige Rolling Correlatie", f"{current_rolling_corr:.4f}")
+    st.metric("Gemiddelde Rolling Correlatie", f"{avg_rolling_corr:.4f}")
+    st.metric("Alpha (α)", f"{alpha:.6f}")
+
+with col3:
+    returns_corr = returns_clean['returns1'].corr(returns_clean['returns2'])
+    volatility_ratio = returns_clean['returns2'].std() / returns_clean['returns1'].std()
+    st.metric("Returns Correlatie", f"{returns_corr:.4f}")
+    st.metric("Volatiliteit Ratio", f"{volatility_ratio:.4f}")
+    st.metric("Std Error (β)", f"{np.sqrt(np.mean((df['price2'] - (alpha + beta * df['price1']))**2)):.4f}")
+
+# Correlatie beoordeling
+st.subheader("🎯 Correlatie Beoordeling")
+
+if abs(pearson_corr) > 0.8:
+    corr_assessment = "🟢 Uitstekend - Sterke correlatie, geschikt voor pairs trading"
+elif abs(pearson_corr) > 0.6:
+    corr_assessment = "🟡 Goed - Redelijke correlatie, geschikt met voorzichtigheid"
+elif abs(pearson_corr) > 0.4:
+    corr_assessment = "🟠 Matig - Zwakke correlatie, verhoogd risico"
+else:
+    corr_assessment = "🔴 Slecht - Zeer zwakke correlatie, niet geschikt voor pairs trading"
+
+st.write(f"**Correlatie beoordeling:** {corr_assessment}")
+
+# R-squared beoordeling
+if r_squared > 0.7:
+    r2_assessment = "🟢 Uitstekend - Sterke lineaire relatie"
+elif r_squared > 0.5:
+    r2_assessment = "🟡 Goed - Redelijke lineaire relatie"
+elif r_squared > 0.3:
+    r2_assessment = "🟠 Matig - Zwakke lineaire relatie"
+else:
+    r2_assessment = "🔴 Slecht - Zeer zwakke lineaire relatie"
+
+st.write(f"**R-squared beoordeling:** {r2_assessment}")
+
+# Stabiliteit beoordeling
+rolling_corr_std = df['rolling_corr'].std()
+if rolling_corr_std < 0.1:
+    stability_assessment = "🟢 Stabiel - Correlatie is consistent over tijd"
+elif rolling_corr_std < 0.2:
+    stability_assessment = "🟡 Redelijk stabiel - Enige fluctuatie in correlatie"
+else:
+    stability_assessment = "🔴 Instabiel - Correlatie varieert sterk over tijd"
+
+st.write(f"**Stabiliteit beoordeling:** {stability_assessment}")
+
+st.markdown("---")
 
 # Samenvatting van de pairs trading analyse
 st.header("📊 Samenvatting van de pairs trading analyse")
