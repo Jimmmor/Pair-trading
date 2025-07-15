@@ -235,21 +235,15 @@ with col1:
         yaxis='y2'
     ))
     
-    # Eenvoudige layout
+    # Layout configuratie
     fig_prices.update_layout(
         title="Prijsverloop",
         xaxis_title="Datum",
-        yaxis_title=f"{name1} Prijs (USD)"
-    )
-    
-    # Secundaire y-as
-    fig_prices.update_layout(yaxis2=dict(
-        title=f"{name2} Prijs (USD)",
-        overlaying='y',
-        side='right'
-    ))
-    
-    st.plotly_chart(fig_prices, use_container_width=True)        tickfont=dict(color='red')
+        yaxis_title=f"{name1} Prijs (USD)",
+        yaxis2=dict(
+            title=f"{name2} Prijs (USD)",
+            overlaying='y',
+            side='right'
         )
     )
     
