@@ -58,7 +58,7 @@ tickers = {
     "Render (RNDR)": "RNDR-USD"
 }
 
-# Sidebar
+#sidebar
 with st.sidebar:
     st.header("🔍 Kies een Coin Pair")
     name1 = st.selectbox("Coin 1", list(tickers.keys()), index=0)
@@ -69,9 +69,10 @@ with st.sidebar:
     periode = st.selectbox("Periode", ["1mo", "3mo", "6mo", "1y"], index=2)
     interval = st.selectbox("Interval", ["1d"] if periode in ["6mo", "1y"] else ["1d", "1h", "30m"], index=0)
     corr_window = st.slider("Rolling correlatie window (dagen)", min_value=5, max_value=60, value=20, step=1)
-
-coin1 = tickers[name1]
-coin2 = tickers[name2]
+    
+    st.markdown("---")
+    zscore_entry_threshold = st.slider("Z-score entry threshold", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
+    zscore_exit_threshold = st.slider("Z-score exit threshold", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
 
 # Data ophalen met caching
 @st.cache_data
