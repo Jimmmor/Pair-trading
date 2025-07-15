@@ -2,9 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
+from sklearn.linear_model import LinearRegression
 
 # Pagina-instellingen
 st.set_page_config(layout="wide")
@@ -84,127 +83,165 @@ def load_data(ticker, period, interval):
 
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
-
-# Validatie
-if data1.empty or data2.empty or "Close" not in data1.columns or "Close" not in data2.columns:
-    st.error("❌ Data kon niet geladen worden.")
+# Check of data binnen is
+if data1.empty or data2.empty:
+    st.error("Geen data beschikbaar voor één of beide coins. Probeer een andere combinatie of periode.")
     st.stop()
 
-# Data voorbereiden
-s1 = data1["Close"].copy()
-s1.name = coin1
-s2 = data2["Close"].copy()
-s2.name = coin2
-df = pd.concat([s1, s2], axis=1).dropna()
+# Data prijzen - sluitingsprijzen gebruiken
+prices1 = data1['Close']
+prices2 = data2['Close']
 
-# Regressie
-x = df[[coin2]].values
-y = df[coin1].values
-reg = LinearRegression().fit(x, y)
+# Op gelijke lengte brengen (inner join op index)
+df = pd.DataFrame({'price1': prices1, 'price2': prices2}).dropna()
 
-alpha = reg.intercept_
-beta = reg.coef_[0]
-r2 = reg.score(x, y)
+# Linear regression price2 ~ price1 (beta * price1 + alpha)
+X = df[['price1']].values
+y = df['price2'].values
+model = LinearRegression().fit(X, y)
+beta = model.coef_[0]
+alpha = model.intercept_
+r2 = model.score(X, y)
+corr = np.corrcoef(df['price1'], df['price2'])[0, 1]
 
-# Pearson R
-pearson_r = df[coin1].corr(df[coin2])
+# Spread berekenen: residuals van de regressie
+df['spread'] = df['price2'] - (beta * df['price1'] + alpha)
 
-# Spread & Z-score
-df["Spread"] = df[coin1] - (alpha + beta * df[coin2])
-spread_mean = df["Spread"].mean()
-spread_std = df["Spread"].std()
-df["Z-score"] = (df["Spread"] - spread_mean) / spread_std
+# Spread stats
+spread_mean = df['spread'].mean()
+spread_std = df['spread'].std()
 
-# Ratio en correlatie
-df["Ratio"] = df[coin1] / df[coin2]
-df["Rolling Correlatie"] = df[coin1].rolling(window=corr_window).corr(df[coin2])
-mean_ratio = df["Ratio"].mean()
+# Z-score van spread
+df['zscore'] = (df['spread'] - spread_mean) / spread_std
 
-# Statistieken uitleg
-with st.expander("📊 Statistieken & Evaluatie"):
-    st.markdown(f"""
-    Hier zie je de statistische evaluatie van de relatie tussen {coin1} en {coin2}:
-    
-    - **Alpha (α): {alpha:.4f}** → Verwachte waarde van {coin1} als {coin2} nul is.
-    - **Beta (β): {beta:.4f}** → Voor elke 1% verandering in {coin2}, beweegt {coin1} gemiddeld {beta:.2f}% mee.
-    - **R²: {r2:.4f}** → {r2 * 100:.1f}% van de beweging in {coin1} wordt verklaard door {coin2}.
-    - **Pearson R: {pearson_r:.4f}** → De lineaire samenhang is {'sterk' if abs(pearson_r) > 0.7 else 'matig' if abs(pearson_r) > 0.4 else 'zwak'}.
-    - **Gemiddelde Spread: {spread_mean:.4f}** | σ: {spread_std:.4f}
-    - **Gemiddelde Ratio {coin1}/{coin2}: {mean_ratio:.4f}**
-    """)
-with st.expander("📊 Prijsvergelijking"):
-    st.markdown("Hieronder zie je de prijsontwikkeling van beide assets.")
-    fig_price = go.Figure()
-    fig_price.add_trace(go.Scatter(x=df.index, y=df[coin1], name=coin1))
-    fig_price.add_trace(go.Scatter(x=df.index, y=df[coin2], name=coin2))
-    fig_price.update_layout(title="Prijsvergelijking", xaxis_title="Datum", yaxis_title="Prijs", template="plotly_dark")
-    st.plotly_chart(fig_price, use_container_width=True)
+# Rolling correlatie over gekozen window
+df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
 
-with st.expander("📉 Spread"):
-    st.markdown("De spread tussen de twee assets geeft het verschil in prijs aan.")
-    fig_spread = go.Figure()
-    fig_spread.add_trace(go.Scatter(x=df.index, y=df["Spread"], name="Spread"))
-    fig_spread.update_layout(title="Spread", xaxis_title="Datum", yaxis_title="Spread", template="plotly_dark")
-    st.plotly_chart(fig_spread, use_container_width=True)
+# Plot 1: Prijzen van beide coins
+fig_prices = go.Figure()
+fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], mode='lines', name=name1))
+fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], mode='lines', name=name2))
+fig_prices.update_layout(title="Sluitingsprijzen", yaxis_title="Prijs (USD)", xaxis_title="Datum")
 
-with st.expander("📈 Z-score"):
-    st.markdown("De Z-score laat zien hoe ver de huidige spread afwijkt van zijn gemiddelde.")
-    fig_zscore = go.Figure()
-    fig_zscore.add_trace(go.Scatter(x=df.index, y=df["Z-score"], name="Z-score", line=dict(color="orange")))
-    fig_zscore.update_layout(title="Z-score", xaxis_title="Datum", yaxis_title="Z-score", template="plotly_dark")
-    st.plotly_chart(fig_zscore, use_container_width=True)
+# Plot 2: Spread en Z-score
+fig_spread = go.Figure()
+fig_spread.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
+fig_spread.add_trace(go.Scatter(x=df.index, y=df['zscore'], mode='lines', name='Z-score', yaxis='y2'))
 
-with st.expander("📈 Scatterplot & Regressielijn"):
-    st.markdown("Deze grafiek toont de lineaire relatie tussen de prijzen van beide assets.")
-    fig_scatter = go.Figure()
-    fig_scatter.add_trace(go.Scatter(x=df[coin2], y=df[coin1], mode='markers', name='Punten', marker=dict(color='lightblue')))
-    x_range = np.linspace(df[coin2].min(), df[coin2].max(), 100)
-    fig_scatter.add_trace(go.Scatter(x=x_range, y=alpha + beta * x_range, mode='lines', name='Regressielijn', line=dict(color='orange')))
-    fig_scatter.update_layout(title="Scatterplot & Regressielijn", xaxis_title=coin2, yaxis_title=coin1, template="plotly_dark")
-    st.plotly_chart(fig_scatter, use_container_width=True)
+fig_spread.update_layout(
+    title="Spread en Z-score",
+    yaxis=dict(title='Spread', side='left'),
+    yaxis2=dict(title='Z-score', overlaying='y', side='right'),
+    xaxis_title="Datum"
+)
 
-with st.expander("📉 Rolling Correlatie"):
-    st.markdown("De correlatie tussen de twee assets over een glijdend venster.")
-    fig_corr = go.Figure()
-    fig_corr.add_trace(go.Scatter(
-        x=df.index,
-        y=df["Rolling Correlatie"],
-        mode='lines',
-        name="Rolling Correlatie",
-        line=dict(color='lightgreen'),
-        fill='tozeroy',
-        fillcolor='rgba(0,255,0,0.1)'
-    ))
-    fig_corr.update_layout(title="Rolling Correlatie", xaxis_title="Datum", yaxis_title="Correlatie", template="plotly_dark", yaxis=dict(range=[-1, 1]))
-    st.plotly_chart(fig_corr, use_container_width=True)
+# Plot 3: Rolling correlatie
+fig_corr = go.Figure()
+fig_corr.add_trace(go.Scatter(x=df.index, y=df['rolling_corr'], mode='lines', name='Rolling correlatie'))
+fig_corr.update_layout(
+    title=f"Rolling correlatie (window={corr_window} dagen)",
+    yaxis_title="Correlatie",
+    xaxis_title="Datum",
+    yaxis=dict(range=[-1,1])
+)
 
-# Analyse en aanbeveling
-st.subheader("🤖 Aanbeveling op basis van actuele data")
+# Resultaten en statistieken tonen
+st.subheader("📊 Statistieken")
+st.write(f"**Regressie formule:** {name2} = {beta:.4f} × {name1} + {alpha:.4f}")
+st.write(f"**R²:** {r2:.4f}")
+st.write(f"**Pearson correlatie:** {corr:.4f}")
+st.write(f"**Gemiddelde spread:** {spread_mean:.4f}")
+st.write(f"**Standaarddeviatie spread:** {spread_std:.4f}")
 
-latest_z = df["Z-score"].iloc[-1]
-latest_ratio = df["Ratio"].iloc[-1]
-latest_corr = df["Rolling Correlatie"].iloc[-1]
+# Interpretatie aanbeveling
+st.subheader("💡 Trading aanbeveling")
+if abs(corr) < 0.7:
+    st.warning("Let op: correlatie tussen coins is laag, pairs trading mogelijk minder betrouwbaar.")
+if r2 < 0.6:
+    st.warning("Let op: R² is laag, regressiefit is mogelijk niet sterk.")
+if abs(df['zscore'].iloc[-1]) > 2:
+    direction = "short" if df['zscore'].iloc[-1] > 2 else "long"
+    st.success(f"Z-score extreem hoog ({df['zscore'].iloc[-1]:.2f}): Overweeg een **{direction} positie** op de spread.")
+else:
+    st.info(f"Z-score normaal ({df['zscore'].iloc[-1]:.2f}): Geen directe trade signalen.")
 
-def interpretatie():
-    actie = ""
-    if latest_z > 1:
-        actie = "📉 **Short** de spread — verwacht dat de ratio weer naar het gemiddelde daalt."
-    elif latest_z < -1:
-        actie = "📈 **Long** de spread — verwacht dat de ratio terugkeert naar het gemiddelde."
-    else:
-        actie = "⏸️ Geen actie — Z-score is binnen neutrale zone."
+# Grafieken tonen
+st.plotly_chart(fig_prices, use_container_width=True)
+st.plotly_chart(fig_spread, use_container_width=True)
+st.plotly_chart(fig_corr, use_container_width=True)
+# === Trade signalen gebaseerd op z-score thresholds ===
 
-    richting = "boven" if latest_ratio > mean_ratio else "onder"
-    correlatie = (
-        "sterke correlatie" if latest_corr > 0.7 else
-        "matige correlatie" if latest_corr > 0.4 else
-        "zwakke correlatie"
-    )
+entry_threshold = zscore_entry_threshold
+exit_threshold = zscore_exit_threshold
 
-    return f"""
-    - De **huidige Z-score is {latest_z:.2f}** → {actie}  
-    - De **ratio staat {richting} het gemiddelde ({mean_ratio:.4f})**.  
-    - De **rolling correlatie is {latest_corr:.2f}** → {correlatie}.  
-    """
+# Signalen: long spread = zscore < -entry_threshold, short spread = zscore > entry_threshold
+df['long_entry'] = df['zscore'] < -entry_threshold
+df['short_entry'] = df['zscore'] > entry_threshold
+df['exit'] = df['zscore'].abs() < exit_threshold
 
-st.markdown(interpretatie())
+# Huidige positie bepalen (laatste data punt)
+if df['long_entry'].iloc[-1]:
+    current_position = "Long Spread (koop coin2, verkoop coin1)"
+elif df['short_entry'].iloc[-1]:
+    current_position = "Short Spread (verkoop coin2, koop coin1)"
+elif df['exit'].iloc[-1]:
+    current_position = "Exit positie (geen trade)"
+else:
+    current_position = "Geen duidelijk signaal"
+
+st.subheader("🚦 Huidige trade signaal")
+st.write(f"**Z-score laatste waarde:** {df['zscore'].iloc[-1]:.2f}")
+st.write(f"**Signaal:** {current_position}")
+
+# === Entry, exit, stoploss niveaus visualiseren ===
+
+# Entry lijnen
+entry_long_level = -entry_threshold * spread_std + spread_mean
+entry_short_level = entry_threshold * spread_std + spread_mean
+exit_level_pos = exit_threshold * spread_std + spread_mean
+exit_level_neg = -exit_threshold * spread_std + spread_mean
+
+fig_signal = go.Figure()
+fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
+
+# Entry en exit lijnen
+fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), annotation_text='Long Entry', annotation_position='bottom left')
+fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), annotation_text='Short Entry', annotation_position='top left')
+fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), annotation_text='Exit', annotation_position='top right')
+fig_signal.add_hline(y=exit_level_neg, line=dict(color='blue', dash='dot'), annotation_text='Exit', annotation_position='bottom right')
+
+fig_signal.update_layout(title="Spread met Entry en Exit niveaus", yaxis_title="Spread", xaxis_title="Datum")
+
+st.plotly_chart(fig_signal, use_container_width=True)
+
+# === Stoploss level (optioneel) ===
+stoploss_pct = 0.05  # bv. 5% stoploss van spread (kan aanpasbaar gemaakt worden)
+
+# Bijvoorbeeld stoploss niveaus +/- 5% van spread mean
+stoploss_upper = spread_mean * (1 + stoploss_pct)
+stoploss_lower = spread_mean * (1 - stoploss_pct)
+
+st.subheader("🛑 Stoploss niveau (voorbeeld)")
+st.write(f"Stoploss boven: {stoploss_upper:.4f}")
+st.write(f"Stoploss onder: {stoploss_lower:.4f}")
+
+# === Samenvatting en advies ===
+st.subheader("📈 Samenvatting en advies")
+
+st.markdown(f"""
+- **Coin pair:** {name1} & {name2}  
+- **Periode:** {start_date} tot {end_date}  
+- **Correlatie:** {corr:.2f}  
+- **R²:** {r2:.2f}  
+- **Laatste z-score:** {df['zscore'].iloc[-1]:.2f}  
+
+**Interpretatie:**
+- Bij een z-score > ±{entry_threshold} wordt een trade signaal gegeven (long/short spread).  
+- Bij een z-score binnen ±{exit_threshold} wordt aangeraden positie te sluiten.  
+- Wees voorzichtig bij een lage correlatie (<0.7) of lage R² (<0.6), de betrouwbaarheid van de trade neemt af.
+
+**Huidig signaal:** {current_position}  
+""")
+
+
+
