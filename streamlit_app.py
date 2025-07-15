@@ -223,8 +223,7 @@ with col1:
         x=df.index, 
         y=df['price1'], 
         name=name1, 
-        line=dict(color='blue'),
-        yaxis='y'
+        line=dict(color='blue')
     ))
     
     # Coin 2 op secundaire y-as
@@ -236,23 +235,24 @@ with col1:
         yaxis='y2'
     ))
     
+    # Eenvoudige layout
     fig_prices.update_layout(
         title="Prijsverloop",
         xaxis_title="Datum",
-        yaxis=dict(
-            title=f"{name1} Prijs (USD)",
-            titlefont=dict(color='blue'),
-            tickfont=dict(color='blue')
-        ),
-        yaxis2=dict(
-            title=f"{name2} Prijs (USD)",
-            titlefont=dict(color='red'),
-            tickfont=dict(color='red'),
-            anchor='x',
-            overlaying='y',
-            side='right'
+        yaxis_title=f"{name1} Prijs (USD)"
+    )
+    
+    # Secundaire y-as
+    fig_prices.update_layout(yaxis2=dict(
+        title=f"{name2} Prijs (USD)",
+        overlaying='y',
+        side='right'
+    ))
+    
+    st.plotly_chart(fig_prices, use_container_width=True)        tickfont=dict(color='red')
         )
     )
+    
     st.plotly_chart(fig_prices, use_container_width=True)
 
 with col2:
