@@ -215,11 +215,44 @@ st.write(f"Stoploss onder: {stoploss_lower:.4f}")
 col1, col2 = st.columns(2)
 
 with col1:
-    # Prijs grafiek
+    # Prijs grafiek met dubbele y-as
     fig_prices = go.Figure()
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red')))
-    fig_prices.update_layout(title="Prijsverloop", yaxis_title="Prijs (USD)", xaxis_title="Datum")
+    
+    # Coin 1 op primaire y-as
+    fig_prices.add_trace(go.Scatter(
+        x=df.index, 
+        y=df['price1'], 
+        name=name1, 
+        line=dict(color='blue'),
+        yaxis='y'
+    ))
+    
+    # Coin 2 op secundaire y-as
+    fig_prices.add_trace(go.Scatter(
+        x=df.index, 
+        y=df['price2'], 
+        name=name2, 
+        line=dict(color='red'),
+        yaxis='y2'
+    ))
+    
+    fig_prices.update_layout(
+        title="Prijsverloop",
+        xaxis_title="Datum",
+        yaxis=dict(
+            title=f"{name1} Prijs (USD)",
+            titlefont=dict(color='blue'),
+            tickfont=dict(color='blue')
+        ),
+        yaxis2=dict(
+            title=f"{name2} Prijs (USD)",
+            titlefont=dict(color='red'),
+            tickfont=dict(color='red'),
+            anchor='x',
+            overlaying='y',
+            side='right'
+        )
+    )
     st.plotly_chart(fig_prices, use_container_width=True)
 
 with col2:
