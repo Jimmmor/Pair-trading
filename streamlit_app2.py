@@ -1,282 +1,212 @@
-# Realistische Pairs Trading Strategie: €100 naar €1000 in 18-24 maanden
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-## ✅ **REALISTISCHE VERWACHTINGEN**
+# Page configuration
+st.set_page_config(
+    page_title="Pairs Trading Strategy",
+    page_icon="📈",
+    layout="wide"
+)
 
-Market conditions, trading experience, and risk tolerance all play a role in determining achievable returns. Een 1000% return is mogelijk, maar vereist tijd, discipline en realistische targets.
+# Title
+st.title("🚀 Realistische Pairs Trading Strategie: €100 → €1000")
 
-**Werkelijke tijdlijn**: 18-24 maanden met compound growth van 15-25% per maand
+# Sidebar for phase selection
+st.sidebar.header("Strategy Phases")
+phase = st.sidebar.selectbox(
+    "Select Phase",
+    ["Fase 1: Foundation", "Fase 2: Growth", "Fase 3: Acceleration", "Fase 4: Final Push"]
+)
 
-## 📊 **Gefaseerde Compound Strategie**
-
-### **Fase 1: Foundation (Maand 1-3) - €100 → €200**
-**Target**: 26% maandelijks compound return
-- **Maand 1**: €100 → €126
-- **Maand 2**: €126 → €159  
-- **Maand 3**: €159 → €200
-
-**Strategie**: Conservatief leren
-- Position size: 8-12% per trade
-- Z-score threshold: 2.0
-- Max 2 posities tegelijk
-- Focus op ETH/BTC, SOL/ETH pairs
-
-### **Fase 2: Growth (Maand 4-9) - €200 → €600**
-**Target**: 20% maandelijks compound return
-- **Maand 4**: €200 → €240
-- **Maand 5**: €240 → €288
-- **Maand 6**: €288 → €346
-- **Maand 7**: €346 → €415
-- **Maand 8**: €415 → €498
-- **Maand 9**: €498 → €600
-
-**Strategie**: Gecontroleerde expansie
-- Position size: 12-15% per trade
-- Z-score threshold: 2.2
-- Max 3 posities tegelijk
-- Diversificatie naar ADA/DOT, MATIC/AVAX
-
-### **Fase 3: Acceleration (Maand 10-15) - €600 → €900**
-**Target**: 15% maandelijks compound return
-- **Maand 10**: €600 → €690
-- **Maand 11**: €690 → €794
-- **Maand 12**: €794 → €913
-- **Maand 13**: €913 → €900 (target bereikt)
-
-**Strategie**: Ervaren trading
-- Position size: 10-12% per trade
-- Z-score threshold: 2.5
-- Max 4 posities tegelijk
-- Intraday opportunities
-
-### **Fase 4: Final Push (Maand 16-18) - €900 → €1000**
-**Target**: 3.7% maandelijks compound return
-- **Maand 16**: €900 → €933
-- **Maand 17**: €933 → €967
-- **Maand 18**: €967 → €1000
-
-**Strategie**: Voorzichtige afronding
-- Position size: 8-10% per trade
-- Risico management prioriteit
-- Profit protection
-
-## 🎯 **Werkbare Entry/Exit Strategie**
-
-### **Entry Criteria (Alle moeten kloppen)**
-```python
-# Primaire signalen
-zscore_entry = 2.0  # Start conservatief
-correlation_min = 0.65  # Sterke correlatie
-r_squared_min = 0.45  # Goede fit
-volatility_max = 1.3 * historical_std  # Niet te volatiel
-
-# Bevestiging
-volume_spike = 1.15  # 15% volume stijging
-spread_within_2std = True  # Normale spread range
-```
-
-### **Position Sizing per Fase**
-```python
-def calculate_position_size(account_value, phase):
-    if account_value < 200:  # Fase 1
-        return min(account_value * 0.10, 20)  # Max €20 per trade
-    elif account_value < 600:  # Fase 2
-        return min(account_value * 0.12, 70)  # Max €70 per trade
-    elif account_value < 900:  # Fase 3
-        return min(account_value * 0.10, 90)  # Max €90 per trade
-    else:  # Fase 4
-        return min(account_value * 0.08, 80)  # Max €80 per trade
-```
-
-### **Exit Strategie (Ladder System)**
-```python
-def exit_strategy(zscore, position_value, days_held):
-    exits = []
+# Main content based on phase
+if phase == "Fase 1: Foundation":
+    st.header("📊 Fase 1: Foundation (Maand 1-3)")
+    st.write("**Target**: €100 → €200 (26% maandelijks compound return)")
     
-    # Profit taking
-    if zscore <= 1.5:
-        exits.append(("25%", "First profit"))
-    if zscore <= 1.0:
-        exits.append(("50%", "Main profit"))
-    if zscore <= 0.5:
-        exits.append(("75%", "Major profit"))
-    if zscore <= 0.2:
-        exits.append(("100%", "Full exit"))
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Maand 1", "€126", "€26")
+    with col2:
+        st.metric("Maand 2", "€159", "€33")
+    with col3:
+        st.metric("Maand 3", "€200", "€41")
     
-    # Stop losses
-    if position_value <= -0.12:  # 12% loss
-        exits.append(("100%", "Stop loss"))
-    if days_held >= 21:  # Time stop
-        exits.append(("100%", "Time exit"))
+    st.subheader("Strategie Parameters")
+    st.write("""
+    - Position size: 8-12% per trade
+    - Z-score threshold: 2.0
+    - Max 2 posities tegelijk
+    - Focus op ETH/BTC, SOL/ETH pairs
+    """)
+
+elif phase == "Fase 2: Growth":
+    st.header("📈 Fase 2: Growth (Maand 4-9)")
+    st.write("**Target**: €200 → €600 (20% maandelijks compound return)")
     
-    return exits
-```
+    # Create growth chart
+    months = ["Maand 4", "Maand 5", "Maand 6", "Maand 7", "Maand 8", "Maand 9"]
+    values = [240, 288, 346, 415, 498, 600]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=months,
+        y=values,
+        mode='lines+markers',
+        name='Account Value',
+        line=dict(color='green', width=3)
+    ))
+    fig.update_layout(
+        title="Growth Phase Progress",
+        xaxis_title="Month",
+        yaxis_title="Account Value (€)",
+        height=400
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-## 📈 **Optimale Crypto Pairs per Fase**
-
-### **Fase 1: Leren (Stabiele Pairs)**
-- **ETH/BTC**: Correlatie 0.7-0.8, lage volatiliteit
-- **BNB/ETH**: Predictable bewegingen
-- **SOL/ETH**: Goede liquiditeit
-
-### **Fase 2: Groei (Meer Volatiele Pairs)**
-- **ADA/DOT**: Sector correlatie
-- **MATIC/AVAX**: Layer 2 movement
-- **LINK/UNI**: DeFi correlatie
-- **FIL/ALGO**: Storage/consensus pairs
-
-### **Fase 3: Acceleratie (Diverse Pairs)**
-- **ATOM/NEAR**: Ecosystem plays
-- **APT/SUI**: New L1 competition
-- **LDO/AAVE**: DeFi yield pairs
-- **CRV/1INCH**: DEX pairs
-
-### **Fase 4: Consolidatie (Terug naar Stabiele)**
-- **ETH/BTC**: Reliable returns
-- **BNB/SOL**: Major exchange tokens
-
-## 🛠️ **App Settings per Fase**
-
-### **Fase 1 Settings (Conservatief)**
-```python
-zscore_entry_threshold = 2.0
-zscore_exit_threshold = 0.3
-corr_window = 20
-volatility_window = 15
-stoploss_pct = 12%
-extreme_zscore = 3.5
-min_correlation = 0.65
-```
-
-### **Fase 2 Settings (Balanced)**
-```python
-zscore_entry_threshold = 2.2
-zscore_exit_threshold = 0.4
-corr_window = 18
-volatility_window = 12
-stoploss_pct = 10%
-extreme_zscore = 3.8
-min_correlation = 0.6
-```
-
-### **Fase 3 Settings (Agressief)**
-```python
-zscore_entry_threshold = 2.5
-zscore_exit_threshold = 0.2
-corr_window = 15
-volatility_window = 10
-stoploss_pct = 8%
-extreme_zscore = 4.0
-min_correlation = 0.55
-```
-
-### **Fase 4 Settings (Conservatief)**
-```python
-zscore_entry_threshold = 2.0
-zscore_exit_threshold = 0.5
-corr_window = 25
-volatility_window = 20
-stoploss_pct = 15%
-extreme_zscore = 3.0
-min_correlation = 0.7
-```
-
-## 📊 **Tracking & Milestones**
-
-### **Wekelijkse Targets**
-```python
-def weekly_targets(month, starting_value):
-    monthly_rates = {
-        1: 0.26, 2: 0.26, 3: 0.26,  # Fase 1
-        4: 0.20, 5: 0.20, 6: 0.20, 7: 0.20, 8: 0.20, 9: 0.20,  # Fase 2
-        10: 0.15, 11: 0.15, 12: 0.15, 13: 0.15, 14: 0.15, 15: 0.15,  # Fase 3
-        16: 0.037, 17: 0.037, 18: 0.037  # Fase 4
+elif phase == "Fase 3: Acceleration":
+    st.header("🚀 Fase 3: Acceleration (Maand 10-15)")
+    st.write("**Target**: €600 → €900 (15% maandelijks compound return)")
+    
+    st.subheader("Recommended Pairs")
+    pairs_data = {
+        "Pair": ["ATOM/NEAR", "APT/SUI", "LDO/AAVE", "CRV/1INCH"],
+        "Type": ["Ecosystem plays", "New L1 competition", "DeFi yield pairs", "DEX pairs"],
+        "Risk Level": ["Medium", "High", "Medium", "Medium"]
     }
+    st.dataframe(pd.DataFrame(pairs_data))
+
+else:  # Fase 4
+    st.header("🎯 Fase 4: Final Push (Maand 16-18)")
+    st.write("**Target**: €900 → €1000 (3.7% maandelijks compound return)")
     
-    weekly_rate = (1 + monthly_rates[month]) ** (1/4) - 1
-    return starting_value * (1 + weekly_rate)
-```
+    st.success("Conservative completion phase - Focus on capital preservation!")
 
-### **Key Performance Metrics**
-- **Win Rate**: 55-65% (realistisch)
-- **Average Win**: 6-10%
-- **Average Loss**: 3-5%
-- **Profit Factor**: 1.5-2.0
-- **Max Drawdown**: <25%
+# Position Size Calculator
+st.header("💰 Position Size Calculator")
+col1, col2 = st.columns(2)
+with col1:
+    account_value = st.number_input("Current Account Value (€)", min_value=100, max_value=1000, value=100)
+with col2:
+    selected_phase = st.selectbox(
+        "Current Phase",
+        ["Fase 1 (<€200)", "Fase 2 (€200-600)", "Fase 3 (€600-900)", "Fase 4 (>€900)"]
+    )
 
-## 🎯 **Execution Plan**
+# Calculate position size
+def calculate_position_size(account_value, phase):
+    if phase == "Fase 1 (<€200)":
+        return min(account_value * 0.10, 20)
+    elif phase == "Fase 2 (€200-600)":
+        return min(account_value * 0.12, 70)
+    elif phase == "Fase 3 (€600-900)":
+        return min(account_value * 0.10, 90)
+    else:  # Fase 4
+        return min(account_value * 0.08, 80)
 
-### **Dagelijkse Routine**
-1. **07:00**: Check overnight positions
-2. **09:00**: Scan nieuwe opportunities
-3. **13:00**: Midday market check
-4. **17:00**: Final scan voor entries
-5. **21:00**: Position review & planning
+position_size = calculate_position_size(account_value, selected_phase)
+st.metric("Recommended Position Size", f"€{position_size:.2f}")
 
-### **Wekelijkse Review**
-- Analyseer alle trades
-- Update parameters indien nodig
-- Calculate compound growth
-- Adjust position sizing
-- Review phase progression
+# Trading Parameters
+st.header("⚙️ Trading Parameters")
+current_phase_num = 1 if "Fase 1" in selected_phase else 2 if "Fase 2" in selected_phase else 3 if "Fase 3" in selected_phase else 4
 
-### **Maandelijkse Evaluatie**
-- Performance vs target
-- Risk metrics review
-- Strategy adjustments
-- Phase transition decisions
-- Psychological state check
+# Parameters based on phase
+if current_phase_num == 1:
+    params = {
+        "Z-score Entry": 2.0,
+        "Z-score Exit": 0.3,
+        "Correlation Window": 20,
+        "Stop Loss": "12%",
+        "Min Correlation": 0.65
+    }
+elif current_phase_num == 2:
+    params = {
+        "Z-score Entry": 2.2,
+        "Z-score Exit": 0.4,
+        "Correlation Window": 18,
+        "Stop Loss": "10%",
+        "Min Correlation": 0.6
+    }
+elif current_phase_num == 3:
+    params = {
+        "Z-score Entry": 2.5,
+        "Z-score Exit": 0.2,
+        "Correlation Window": 15,
+        "Stop Loss": "8%",
+        "Min Correlation": 0.55
+    }
+else:
+    params = {
+        "Z-score Entry": 2.0,
+        "Z-score Exit": 0.5,
+        "Correlation Window": 25,
+        "Stop Loss": "15%",
+        "Min Correlation": 0.7
+    }
 
-## 💡 **Psychologische Discipline**
+# Display parameters in columns
+cols = st.columns(len(params))
+for i, (key, value) in enumerate(params.items()):
+    with cols[i]:
+        st.metric(key, value)
 
-### **Compound Mindset**
-Keep expectations realistic to avoid emotional highs and lows
+# Compound Growth Simulator
+st.header("📊 Compound Growth Simulator")
+months = list(range(1, 19))
+account_values = [100]  # Starting value
 
-- **Focus op proces**, niet op daily P&L
-- **Celebrate milestones**, niet individual trades
-- **Patience during drawdowns**
-- **Consistency over big wins**
+monthly_rates = {
+    1: 0.26, 2: 0.26, 3: 0.26,  # Fase 1
+    4: 0.20, 5: 0.20, 6: 0.20, 7: 0.20, 8: 0.20, 9: 0.20,  # Fase 2
+    10: 0.15, 11: 0.15, 12: 0.15, 13: 0.15, 14: 0.15, 15: 0.15,  # Fase 3
+    16: 0.037, 17: 0.037, 18: 0.037  # Fase 4
+}
 
-### **Risk Management Regels**
-- **Nooit meer dan 15% account per trade**
-- **Geen revenge trading na losses**
-- **Geen position sizing verhogen na wins**
-- **Altijd stop loss gebruiken**
+for month in months:
+    if month == 1:
+        continue
+    prev_value = account_values[-1]
+    new_value = prev_value * (1 + monthly_rates[month])
+    account_values.append(new_value)
 
-## 🔥 **Praktische Tips**
+# Create compound growth chart
+fig = go.Figure()
+fig.add_trace(go.Scatter(
+    x=months,
+    y=account_values,
+    mode='lines+markers',
+    name='Account Growth',
+    line=dict(color='blue', width=3)
+))
 
-### **Beste Trading Tijden**
-- **Europese opening**: 08:00-10:00 UTC
-- **US overlap**: 13:00-16:00 UTC
-- **Asia close**: 23:00-01:00 UTC
+# Add phase boundaries
+fig.add_vline(x=3.5, line_dash="dash", line_color="red", annotation_text="Fase 1 → 2")
+fig.add_vline(x=9.5, line_dash="dash", line_color="red", annotation_text="Fase 2 → 3")
+fig.add_vline(x=15.5, line_dash="dash", line_color="red", annotation_text="Fase 3 → 4")
 
-### **Vermijd Deze Tijden**
-- **Weekends**: Lage liquiditeit
-- **Major news events**: Onvoorspelbare bewegingen
-- **Low volume periods**: Slechte fills
+fig.update_layout(
+    title="18-Month Compound Growth Plan",
+    xaxis_title="Month",
+    yaxis_title="Account Value (€)",
+    height=500
+)
+st.plotly_chart(fig, use_container_width=True)
 
-### **Monthly Success Checklist**
-- [ ] Target behaald binnen 5%
-- [ ] Max drawdown <25%
-- [ ] Win rate >55%
-- [ ] No major rule violations
-- [ ] Emotional discipline maintained
+# Final metrics
+st.header("🎊 Success Metrics")
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Win Rate Target", "55-65%")
+with col2:
+    st.metric("Average Win", "6-10%")
+with col3:
+    st.metric("Average Loss", "3-5%")
+with col4:
+    st.metric("Max Drawdown", "<25%")
 
-## 🎊 **Realistische Verwachtingen**
-
-In theory, after one year, the account would have expanded by a substantial 69.4%, showcasing the potency of compounding
-
-**Deze strategie is realistisch omdat:**
-- Compound rates verlagen over tijd
-- Risk management is ingebouwd
-- Gefaseerde approach
-- Bewezen pair correlaties
-- Psychologische factoren addressed
-
-**Succes factoren:**
-- Every trade has an expected outcome of 1.3% over the long-term
-- Consistent execution
-- Proper risk management
-- Emotional discipline
-- Realistic expectations
-
-**Remember**: A more valuable and real-world example of compounding komt van consistent kleine winsten, niet van enkele grote trades.
+# Footer
+st.markdown("---")
+st.markdown("**Remember**: Consistent small wins compound better than seeking big trades!")
