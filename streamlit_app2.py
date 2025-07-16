@@ -190,4 +190,3 @@ else:
 
 st.markdown(f"### 📢 Advies: <span style='color:{kleur}'>{advies}</span>", unsafe_allow_html=True)
 
-st.markdown(\"\"\"\n---\n*Let op: deze tool is educatief en vormt geen financieel advies. Doe altijd je eigen onderzoek.*\n\"\"\")
