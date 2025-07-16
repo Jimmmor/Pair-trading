@@ -1,42 +1,4 @@
-# Generate comprehensive recommendation
-def generate_recommendation(stats_dict, signal, confidence, stoploss_triggers):
-    recommendations = []
-    
-    # Stop loss check first
-    if stoploss_triggers:
-        recommendations.append("🚨 IMMEDIATE ACTION: Stop loss triggered - Exit position now!")
-        return recommendations
-    
-    # Correlation assessment
-    corr = abs(stats_dict['pearson_corr'])
-    if corr > 0.8:
-        recommendations.append("✅ Strong correlation - Excellent for pairs trading")
-    elif corr > 0.6:
-        recommendations.append("🟡 Moderate correlation - Suitable with caution")
-    else:
-        recommendations.append("❌ Weak correlation - High risk for pairs trading")
-    
-    # R-squared assessment
-    if stats_dict['r_squared'] > 0.7:
-        recommendations.append("✅ Strong linear relationship")
-    elif stats_dict['r_squared'] > 0.5:
-        recommendations.append("🟡 Moderate linear relationship")
-    else:
-        recommendations.append("❌ Weak linear relationship")
-    
-    # Volatility assessment
-    if stats_dict['vol_ratio'] > 0.5 and stats_dict['vol_ratio'] < 2.0:
-        recommendations.append("✅ Similar volatility levels")
-    else:
-        recommendations.append("⚠️ Significant volatility difference")
-    
-    # Mean reversion assessment
-    if stats_dict['half_life'] < 30:
-        recommendations.append("✅ Fast mean reversion")
-    elif stats_dict['half_life'] < 90:
-        recommendations.append("🟡 Moderate mean reversion")
-    else:
-        import streamlit as st
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -97,21 +59,6 @@ st.markdown("""
         background-color: #e2e3e5;
         color: #383d41;
         border: 2px solid #d6d8db;
-    }
-    .stoploss-box {
-        background-color: #f8d7da;
-        color: #721c24;
-        border: 2px solid #f5c6cb;
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-    }
-    .stoploss-level {
-        background-color: #fff3cd;
-        padding: 0.5rem;
-        border-radius: 5px;
-        margin: 0.25rem 0;
-        border-left: 4px solid #ffc107;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -216,27 +163,6 @@ with st.sidebar:
                                        min_value=90, max_value=99, value=95, step=1)
         lookback_period = st.slider("Lookback period for signals", 
                                    min_value=1, max_value=10, value=3, step=1)
-    
-    # Stop Loss Configuration
-    st.header("⚠️ Stop Loss Settings")
-    with st.expander("📊 Stop Loss Parameters", expanded=True):
-        st.markdown("**Volatility-Based Stop Loss**")
-        volatility_window = st.slider("Volatility calculation window", 
-                                    min_value=5, max_value=50, value=20, step=5)
-        volatility_multiplier = st.slider("Volatility multiplier", 
-                                        min_value=1.0, max_value=5.0, value=2.5, step=0.1)
-        
-        st.markdown("**ATR-Based Stop Loss**")
-        atr_period = st.slider("ATR period", 
-                             min_value=5, max_value=30, value=14, step=1)
-        
-        st.markdown("**Risk Thresholds**")
-        extreme_zscore = st.slider("Extreme Z-score threshold", 
-                                 min_value=3.0, max_value=6.0, value=4.0, step=0.1)
-        min_correlation = st.slider("Minimum correlation threshold", 
-                                  min_value=0.1, max_value=0.8, value=0.3, step=0.05)
-        max_holding_days = st.slider("Maximum holding period (days)", 
-                                   min_value=1, max_value=90, value=30, step=1)
 
 # Convert names to ticker symbols
 coin1 = tickers[name1]
@@ -376,88 +302,8 @@ def calculate_enhanced_stats(df):
 
 stats_dict = calculate_enhanced_stats(df)
 
-# Advanced Stop Loss System
-def calculate_dynamic_stoploss(df, stoploss_params):
-    """
-    Calculate multi-layered dynamic stop loss levels
-    """
-    current_spread = df['spread'].iloc[-1]
-    current_zscore = df['zscore'].iloc[-1]
-    
-    # 1. Volatility-based stop loss
-    volatility_window = stoploss_params['volatility_window']
-    volatility_multiplier = stoploss_params['volatility_multiplier']
-    current_vol = df['spread'].rolling(volatility_window).std().iloc[-1]
-    
-    # 2. ATR-based stop loss (Average True Range equivalent for spread)
-    atr_period = stoploss_params['atr_period']
-    spread_high = df['spread'].rolling(atr_period).max()
-    spread_low = df['spread'].rolling(atr_period).min()
-    spread_range = spread_high - spread_low
-    current_atr = spread_range.rolling(atr_period).mean().iloc[-1]
-    
-    # 3. Z-score extreme levels
-    extreme_zscore = stoploss_params['extreme_zscore']
-    
-    # 4. Correlation-based stop loss
-    min_correlation = stoploss_params['min_correlation']
-    current_corr = df['rolling_corr'].iloc[-1]
-    
-    # 5. Time-based stop loss (simulated entry time)
-    max_holding_days = stoploss_params['max_holding_days']
-    
-    # Calculate stop loss levels
-    volatility_stoploss_distance = current_vol * volatility_multiplier
-    atr_stoploss_distance = current_atr * 0.5  # More conservative
-    
-    # Combine multiple criteria
-    combined_stoploss_distance = max(volatility_stoploss_distance, atr_stoploss_distance)
-    
-    stoploss_levels = {
-        'volatility_upper': stats_dict['spread_mean'] + volatility_stoploss_distance,
-        'volatility_lower': stats_dict['spread_mean'] - volatility_stoploss_distance,
-        'atr_upper': stats_dict['spread_mean'] + atr_stoploss_distance,
-        'atr_lower': stats_dict['spread_mean'] - atr_stoploss_distance,
-        'combined_upper': stats_dict['spread_mean'] + combined_stoploss_distance,
-        'combined_lower': stats_dict['spread_mean'] - combined_stoploss_distance,
-        'extreme_zscore_breach': abs(current_zscore) > extreme_zscore,
-        'correlation_breach': current_corr < min_correlation,
-        'current_volatility': current_vol,
-        'current_atr': current_atr
-    }
-    
-    return stoploss_levels
-
-def check_stoploss_triggers(df, stoploss_levels, current_position_type):
-    """
-    Check if any stop loss conditions are triggered
-    """
-    current_spread = df['spread'].iloc[-1]
-    current_zscore = df['zscore'].iloc[-1]
-    current_corr = df['rolling_corr'].iloc[-1]
-    
-    triggers = []
-    
-    # Check volatility-based stop loss
-    if current_position_type == "LONG":
-        if current_spread <= stoploss_levels['combined_lower']:
-            triggers.append("Volatility Stop Loss (Long)")
-    elif current_position_type == "SHORT":
-        if current_spread >= stoploss_levels['combined_upper']:
-            triggers.append("Volatility Stop Loss (Short)")
-    
-    # Check extreme z-score
-    if stoploss_levels['extreme_zscore_breach']:
-        triggers.append(f"Extreme Z-Score ({current_zscore:.2f})")
-    
-    # Check correlation breakdown
-    if stoploss_levels['correlation_breach']:
-        triggers.append(f"Correlation Breakdown ({current_corr:.3f})")
-    
-    return triggers
-
-# Enhanced signal generation with stop loss integration
-def generate_signals(df, zscore_entry, zscore_exit, lookback, stoploss_params):
+# Enhanced signal generation
+def generate_signals(df, zscore_entry, zscore_exit, lookback):
     # Basic signals
     df['long_entry'] = df['zscore'] < -zscore_entry
     df['short_entry'] = df['zscore'] > zscore_entry
@@ -468,49 +314,31 @@ def generate_signals(df, zscore_entry, zscore_exit, lookback, stoploss_params):
     df['short_signal'] = df['short_entry'].rolling(window=lookback).sum() > 0
     df['exit_signal'] = df['exit'].rolling(window=lookback).sum() > 0
     
-    # Calculate stop loss levels
-    stoploss_levels = calculate_dynamic_stoploss(df, stoploss_params)
-    
     # Determine current position
     last_zscore = df['zscore'].iloc[-1]
     
-    # Determine position type first
     if last_zscore < -zscore_entry:
-        position_type = "LONG"
         signal = "LONG"
         signal_class = "signal-long"
         position = f"Long Spread: Buy {name2}, Sell {name1}"
-        confidence = min(abs(last_zscore) / zscore_entry, 3.0)
+        confidence = min(abs(last_zscore) / zscore_entry, 3.0)  # Cap at 3x
     elif last_zscore > zscore_entry:
-        position_type = "SHORT"
         signal = "SHORT"
         signal_class = "signal-short"
         position = f"Short Spread: Sell {name2}, Buy {name1}"
         confidence = min(abs(last_zscore) / zscore_entry, 3.0)
     elif abs(last_zscore) < zscore_exit:
-        position_type = "EXIT"
         signal = "EXIT"
         signal_class = "signal-exit"
         position = "Exit Position"
         confidence = 1.0 - abs(last_zscore) / zscore_exit
     else:
-        position_type = "HOLD"
         signal = "HOLD"
         signal_class = "signal-none"
         position = "No Clear Signal"
         confidence = 0.0
     
-    # Check for stop loss triggers
-    stoploss_triggers = check_stoploss_triggers(df, stoploss_levels, position_type)
-    
-    # Override signal if stop loss is triggered
-    if stoploss_triggers:
-        signal = "STOP_LOSS"
-        signal_class = "signal-short"  # Red color for stop loss
-        position = f"STOP LOSS TRIGGERED: {', '.join(stoploss_triggers)}"
-        confidence = 1.0  # High confidence in stop loss
-    
-    return signal, signal_class, position, confidence, stoploss_levels, stoploss_triggers
+    return signal, signal_class, position, confidence
 
 signal, signal_class, position, confidence = generate_signals(df, zscore_entry_threshold, zscore_exit_threshold, lookback_period)
 
@@ -534,67 +362,6 @@ with col2:
 with col3:
     st.metric("Half-Life (days)", f"{stats_dict['half_life']:.1f}" if stats_dict['half_life'] != np.inf else "∞")
     st.metric("Spread Volatility", f"{stats_dict['spread_std']:.4f}")
-
-# Display Stop Loss Information
-if stoploss_triggers:
-    st.markdown("### 🚨 Stop Loss Alert")
-    st.markdown(f"""
-    <div class="stoploss-box">
-        <h4>⚠️ STOP LOSS TRIGGERED</h4>
-        <p><strong>Triggers:</strong> {', '.join(stoploss_triggers)}</p>
-        <p><strong>Action:</strong> Exit position immediately</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Stop Loss Levels Display
-st.markdown("### 🛑 Dynamic Stop Loss Levels")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown("**Volatility-Based**")
-    st.markdown(f"""
-    <div class="stoploss-level">
-        <strong>Upper:</strong> {stoploss_levels['volatility_upper']:.4f}<br>
-        <strong>Lower:</strong> {stoploss_levels['volatility_lower']:.4f}<br>
-        <strong>Distance:</strong> {stoploss_levels['current_volatility'] * volatility_multiplier:.4f}
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown("**ATR-Based**")
-    st.markdown(f"""
-    <div class="stoploss-level">
-        <strong>Upper:</strong> {stoploss_levels['atr_upper']:.4f}<br>
-        <strong>Lower:</strong> {stoploss_levels['atr_lower']:.4f}<br>
-        <strong>Current ATR:</strong> {stoploss_levels['current_atr']:.4f}
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown("**Combined (Active)**")
-    st.markdown(f"""
-    <div class="stoploss-level">
-        <strong>Upper:</strong> {stoploss_levels['combined_upper']:.4f}<br>
-        <strong>Lower:</strong> {stoploss_levels['combined_lower']:.4f}<br>
-        <strong>Current Spread:</strong> {df['spread'].iloc[-1]:.4f}
-    </div>
-    """, unsafe_allow_html=True)
-
-# Risk Metrics
-st.markdown("### ⚠️ Risk Monitoring")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    zscore_risk = "🔴 HIGH" if abs(df['zscore'].iloc[-1]) > extreme_zscore else "🟡 MEDIUM" if abs(df['zscore'].iloc[-1]) > 2.5 else "🟢 LOW"
-    st.metric("Z-Score Risk", zscore_risk)
-
-with col2:
-    corr_risk = "🔴 HIGH" if df['rolling_corr'].iloc[-1] < min_correlation else "🟡 MEDIUM" if df['rolling_corr'].iloc[-1] < 0.5 else "🟢 LOW"
-    st.metric("Correlation Risk", corr_risk)
-
-with col3:
-    vol_risk = "🔴 HIGH" if stoploss_levels['current_volatility'] > stats_dict['spread_std'] * 1.5 else "🟡 MEDIUM" if stoploss_levels['current_volatility'] > stats_dict['spread_std'] * 1.2 else "🟢 LOW"
-    st.metric("Volatility Risk", vol_risk)
 
 # Enhanced visualization
 st.markdown("### 📊 Analysis Charts")
@@ -637,22 +404,6 @@ fig.add_trace(
     row=2, col=1
 )
 fig.add_hline(y=stats_dict['spread_mean'], line=dict(color='black', dash='dash'), row=2, col=1)
-
-# Add stop loss levels to spread chart
-fig.add_hline(y=stoploss_levels['combined_upper'], line=dict(color='red', dash='dot', width=2), row=2, col=1)
-fig.add_hline(y=stoploss_levels['combined_lower'], line=dict(color='red', dash='dot', width=2), row=2, col=1)
-
-# Add annotations for stop loss levels
-fig.add_annotation(
-    x=df.index[-1], y=stoploss_levels['combined_upper'],
-    text="Stop Loss Upper", showarrow=True, arrowhead=2, arrowcolor='red',
-    ax=20, ay=-20, row=2, col=1
-)
-fig.add_annotation(
-    x=df.index[-1], y=stoploss_levels['combined_lower'],
-    text="Stop Loss Lower", showarrow=True, arrowhead=2, arrowcolor='red',
-    ax=20, ay=20, row=2, col=1
-)
 
 # Rolling correlation
 fig.add_trace(
@@ -737,7 +488,7 @@ with col4:
     st.metric("Volatility Ratio", f"{stats_dict['vol_ratio']:.4f}")
 
 # Risk management section
-st.markdown("### 🛑 Advanced Risk Management")
+st.markdown("### 🛑 Risk Management")
 
 # Calculate position sizing and risk metrics
 portfolio_value = st.number_input("Portfolio Value (USD)", min_value=1000, value=10000, step=1000)
@@ -748,133 +499,27 @@ current_price1 = df['price1'].iloc[-1]
 current_price2 = df['price2'].iloc[-1]
 current_spread = df['spread'].iloc[-1]
 
-# Enhanced position sizing based on stop loss distance
+# Position sizing based on volatility
 risk_amount = portfolio_value * risk_per_trade
-stoploss_distance = max(
-    abs(current_spread - stoploss_levels['combined_upper']),
-    abs(current_spread - stoploss_levels['combined_lower'])
-)
+position_size = risk_amount / (stats_dict['spread_std'] * zscore_entry_threshold)
 
-if stoploss_distance > 0:
-    position_size = risk_amount / stoploss_distance
-    max_loss = stoploss_distance * position_size
-else:
-    position_size = 0
-    max_loss = 0
+# Calculate stop loss levels
+stop_loss_spread = stats_dict['spread_mean'] + (stats_dict['spread_std'] * zscore_entry_threshold * (1 + stoploss_pct))
+stop_loss_price_impact = stop_loss_spread - current_spread
 
-# Calculate position weights
-if signal == "LONG":
-    # Long spread: long asset2, short asset1
-    asset1_weight = -stats_dict['beta']  # Short position
-    asset2_weight = 1.0  # Long position
-    asset1_notional = abs(asset1_weight * position_size)
-    asset2_notional = asset2_weight * position_size
-elif signal == "SHORT":
-    # Short spread: short asset2, long asset1
-    asset1_weight = stats_dict['beta']  # Long position
-    asset2_weight = -1.0  # Short position
-    asset1_notional = asset1_weight * position_size
-    asset2_notional = abs(asset2_weight * position_size)
-else:
-    asset1_weight = asset2_weight = 0
-    asset1_notional = asset2_notional = 0
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown("**Position Sizing**")
-    st.metric("Suggested Position Size", f"${position_size:.2f}")
-    st.metric("Risk Amount", f"${risk_amount:.2f}")
-    st.metric("Max Loss (Stop Loss)", f"${max_loss:.2f}")
-    st.metric("Risk/Reward Ratio", f"1:{risk_amount/max_loss:.2f}" if max_loss > 0 else "N/A")
-
-with col2:
-    st.markdown("**Asset Allocation**")
-    st.metric(f"{name1} Notional", f"${asset1_notional:.2f}")
-    st.metric(f"{name2} Notional", f"${asset2_notional:.2f}")
-    st.metric(f"{name1} Weight", f"{asset1_weight:.3f}")
-    st.metric(f"{name2} Weight", f"{asset2_weight:.3f}")
-
-with col3:
-    st.markdown("**Risk Metrics**")
-    st.metric("Stop Loss Distance", f"{stoploss_distance:.4f}")
-    st.metric("Portfolio Risk", f"{(max_loss/portfolio_value)*100:.2f}%")
-    volatility_risk = stoploss_levels['current_volatility'] / stats_dict['spread_std']
-    st.metric("Volatility Risk Factor", f"{volatility_risk:.2f}x")
-    
-    # Kelly Criterion approximation
-    win_rate = 0.55  # Assumed win rate (can be backtested)
-    avg_win_loss_ratio = 1.2  # Assumed (can be backtested)
-    kelly_fraction = (win_rate * avg_win_loss_ratio - (1 - win_rate)) / avg_win_loss_ratio
-    st.metric("Kelly Fraction", f"{kelly_fraction:.2%}")
-
-# Advanced Risk Alerts
-st.markdown("### 🚨 Risk Alerts")
-risk_alerts = []
-
-# Check various risk conditions
-if abs(df['zscore'].iloc[-1]) > extreme_zscore:
-    risk_alerts.append(f"⚠️ Extreme Z-score: {df['zscore'].iloc[-1]:.2f}")
-
-if df['rolling_corr'].iloc[-1] < min_correlation:
-    risk_alerts.append(f"⚠️ Low correlation: {df['rolling_corr'].iloc[-1]:.3f}")
-
-if stoploss_levels['current_volatility'] > stats_dict['spread_std'] * 2:
-    risk_alerts.append(f"⚠️ High volatility: {stoploss_levels['current_volatility']:.4f}")
-
-if max_loss > portfolio_value * 0.1:  # More than 10% of portfolio at risk
-    risk_alerts.append(f"⚠️ High portfolio risk: {(max_loss/portfolio_value)*100:.1f}%")
-
-if len(risk_alerts) > 0:
-    for alert in risk_alerts:
-        st.warning(alert)
-else:
-    st.success("✅ No critical risk alerts")
-
-# Position Management Helper
-st.markdown("### 📋 Position Management")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("**Entry Checklist:**")
-    checklist_items = [
-        ("Z-score within entry range", abs(df['zscore'].iloc[-1]) > zscore_entry_threshold),
-        ("Correlation above minimum", df['rolling_corr'].iloc[-1] > min_correlation),
-        ("Volatility not extreme", stoploss_levels['current_volatility'] < stats_dict['spread_std'] * 2),
-        ("Portfolio risk acceptable", max_loss < portfolio_value * 0.05)
-    ]
-    
-    for item, condition in checklist_items:
-        status = "✅" if condition else "❌"
-        st.write(f"{status} {item}")
+    st.markdown("**Position Sizing**")
+    st.write(f"Suggested position size: ${position_size:.2f}")
+    st.write(f"Risk amount: ${risk_amount:.2f}")
+    st.write(f"Current spread: {current_spread:.4f}")
 
 with col2:
-    st.markdown("**Exit Conditions:**")
-    exit_conditions = [
-        ("Z-score mean reversion", abs(df['zscore'].iloc[-1]) < zscore_exit_threshold),
-        ("Stop loss triggered", bool(stoploss_triggers)),
-        ("Correlation breakdown", df['rolling_corr'].iloc[-1] < min_correlation),
-        ("Extreme Z-score", abs(df['zscore'].iloc[-1]) > extreme_zscore)
-    ]
-    
-    for condition, triggered in exit_conditions:
-        status = "🔴" if triggered else "🟢"
-        st.write(f"{status} {condition}")
-
-# Trade execution helper
-if signal in ["LONG", "SHORT"] and not stoploss_triggers:
-    st.markdown("### 🎯 Trade Execution Guide")
-    st.info(f"""
-    **Trade Type:** {signal} Spread
-    
-    **Actions:**
-    - {name1}: {'SELL' if signal == 'LONG' else 'BUY'} ${asset1_notional:.2f}
-    - {name2}: {'BUY' if signal == 'LONG' else 'SELL'} ${asset2_notional:.2f}
-    
-    **Stop Loss:** {stoploss_levels['combined_upper']:.4f} (upper) / {stoploss_levels['combined_lower']:.4f} (lower)
-    **Target:** Z-score return to ±{zscore_exit_threshold}
-    **Max Risk:** ${max_loss:.2f}
-    """)
+    st.markdown("**Stop Loss Levels**")
+    st.write(f"Stop loss spread: {stop_loss_spread:.4f}")
+    st.write(f"Price impact: {stop_loss_price_impact:.4f}")
+    st.write(f"Max loss: ${abs(stop_loss_price_impact * position_size):.2f}")
 
 # Trading recommendation
 st.markdown("### 💡 Trading Recommendation")
