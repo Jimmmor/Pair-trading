@@ -97,21 +97,29 @@ if data1.empty or data2.empty:
     st.error("Geen data beschikbaar voor één of beide coins. Probeer een andere combinatie of periode.")
     st.stop()
 
+def ensure_series(data):
+    if isinstance(data, pd.DataFrame):
+        return data.iloc[:, 0]  # pak eerste kolom als Series
+    if not isinstance(data, pd.Series):
+        return pd.Series(data)
+    return data
+
 # Extract sluitprijzen
 df1 = data1['Close'] if 'Close' in data1 else data1.iloc[:, 0]
 df2 = data2['Close'] if 'Close' in data2 else data2.iloc[:, 0]
 
-# Serie conversie en align
-print("df1 type:", type(df1))
-print("df1 shape (indien mogelijk):", getattr(df1, "shape", "geen shape"))
+# Zet om naar Series
+df1 = ensure_series(df1)
+df2 = ensure_series(df2)
 
-if not isinstance(df2, pd.Series): df2 = pd.Series(df2)
+# Align
 df1, df2 = df1.align(df2, join='inner')
 
 df = pd.DataFrame({'price1': df1, 'price2': df2}).dropna()
 if df.empty:
     st.error("Geen overlappende data beschikbaar voor beide coins.")
     st.stop()
+
 
 # Regressie model
 X = df['price1'].values.reshape(-1, 1)
