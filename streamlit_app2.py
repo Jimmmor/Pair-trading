@@ -102,7 +102,9 @@ df1 = data1['Close'] if 'Close' in data1 else data1.iloc[:, 0]
 df2 = data2['Close'] if 'Close' in data2 else data2.iloc[:, 0]
 
 # Serie conversie en align
-if not isinstance(df1, pd.Series): df1 = pd.Series(df1)
+print("df1 type:", type(df1))
+print("df1 shape (indien mogelijk):", getattr(df1, "shape", "geen shape"))
+
 if not isinstance(df2, pd.Series): df2 = pd.Series(df2)
 df1, df2 = df1.align(df2, join='inner')
 
