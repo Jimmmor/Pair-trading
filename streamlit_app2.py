@@ -615,4 +615,4 @@ with st.expander("📋 Position Management"):
         ]
         
         for item, condition in checklist_items:
-            status = "✅
+            status = "✅"
