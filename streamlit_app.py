@@ -448,31 +448,6 @@ else:
 
 st.write(f"**Stabiliteit beoordeling:** {stability_assessment}")
 
-st.markdown("---")
-
-# Samenvatting van de pairs trading analyse
-st.header("📊 Samenvatting van de pairs trading analyse")
-
-st.markdown(f"""
-- **Asset 1:** {name1} ({coin1})
-- **Asset 2:** {name2} ({coin2})
-- **Periode:** {start_date} tot {end_date}
-- **Data punten:** {len(df)}
-
-**Regressie resultaten:**
-- Alpha: {alpha:.6f}
-- Beta: {beta:.6f}
-- R²: {r_squared:.4f}
-- Pearson correlatie: {pearson_corr:.4f}
-
-**Spread statistieken:**
-- Gemiddelde spread: {spread_mean:.4f}
-- Standaarddeviatie spread: {spread_std:.4f}
-
-**Laatste z-score:** {df['zscore'].iloc[-1]:.2f}
-
-**Huidige signaal:** {current_position}
-""")
 
 # Optioneel: mogelijkheid om data te exporteren
 if st.button("Exporteer analyse naar CSV"):
