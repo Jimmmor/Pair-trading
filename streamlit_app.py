@@ -9,11 +9,6 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(layout="wide")
 st.title("📈 Pairs Trading Monitor")
 
-st.markdown("""
-Vergelijk twee coins, bereken de spread, Z-score en statistieken (alpha, beta, R², Pearson R).  
-Gebruik dit voor pairs trading. Inclusief aanbeveling op basis van ratio, correlatie en Z-score.
-""")
-
 # Beschikbare tickers
 tickers = {
     "Bitcoin (BTC)": "BTC-USD",
@@ -478,19 +473,6 @@ st.markdown(f"""
 
 **Huidige signaal:** {current_position}
 """)
-
-st.header("💡 Mogelijke uitbreidingen")
-
-st.markdown("""
-- Voeg dynamische parameters toe via sliders, bijvoorbeeld z-score thresholds en stoploss percentage.
-- Implementeer backtesting van de strategy om performance over tijd te bekijken.
-- Gebruik real-time data feeds voor live trading signalen.
-- Voeg meerdere paren toe met rangschikking op basis van cointegratie.
-- Integreer een ordermanagement systeem (via broker API).
-- Visualiseer winst/verlies scenario's en risicomanagement.
-""")
-
-st.write("### Bedankt voor het gebruiken van deze pairs trading tool!")
 
 # Optioneel: mogelijkheid om data te exporteren
 if st.button("Exporteer analyse naar CSV"):
