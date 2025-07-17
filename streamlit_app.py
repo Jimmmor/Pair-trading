@@ -98,7 +98,7 @@ if isinstance(data1.columns, pd.MultiIndex):
 else:
     df1 = data1['Close'].dropna()
     df2 = data2['Close'].dropna()
-
+    
 # Debug info
 st.write(f"Data1 shape: {data1.shape}, Data2 shape: {data2.shape}")
 st.write(f"df1 type: {type(df1)}, df2 type: {type(df2)}")
