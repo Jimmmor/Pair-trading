@@ -448,9 +448,6 @@ else:
 
 st.write(f"**Stabiliteit beoordeling:** {stability_assessment}")
 
-st.markdown("---")
-
-
 # Optioneel: mogelijkheid om data te exporteren
 if st.button("Exporteer analyse naar CSV"):
     csv = df.to_csv(index=True)
