@@ -8,30 +8,6 @@ from sklearn.linear_model import LinearRegression
 # Pagina-instellingen
 st.set_page_config(layout="wide")
 st.title("📈 Pairs Trading Monitor")
-st.markdown("---")
-# Samenvatting van de pairs trading analyse
-st.header("📊 Samenvatting van de pairs trading analyse")
-
-st.markdown(f"""
-- **Asset 1:** {name1} ({coin1})
-- **Asset 2:** {name2} ({coin2})
-- **Periode:** {start_date} tot {end_date}
-- **Data punten:** {len(df)}
-
-**Regressie resultaten:**
-- Alpha: {alpha:.6f}
-- Beta: {beta:.6f}
-- R²: {r_squared:.4f}
-- Pearson correlatie: {pearson_corr:.4f}
-
-**Spread statistieken:**
-- Gemiddelde spread: {spread_mean:.4f}
-- Standaarddeviatie spread: {spread_std:.4f}
-
-**Laatste z-score:** {df['zscore'].iloc[-1]:.2f}
-
-**Huidige signaal:** {current_position}
-""")
 
 # Beschikbare tickers
 tickers = {
@@ -84,15 +60,14 @@ with st.sidebar:
     remaining = [k for k in tickers.keys() if k != name1]
     name2 = st.selectbox("Coin 2", remaining, index=0)
     
-    st.markdown("---")  # <--- Vervang deze regel
+    st.markdown("---")
     periode = st.selectbox("Periode", ["1mo", "3mo", "6mo", "1y"], index=2)
     interval = st.selectbox("Interval", ["1d"] if periode in ["6mo", "1y"] else ["1d", "1h", "30m"], index=0)
     corr_window = st.slider("Rolling correlatie window (dagen)", min_value=5, max_value=60, value=20, step=1)
     
-    st.markdown("---")  # <--- Voeg dit toe in plaats van st.("---")
+    st.markdown("---")
     zscore_entry_threshold = st.slider("Z-score entry threshold", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
     zscore_exit_threshold = st.slider("Z-score exit threshold", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
-
 
 # Converteer namen naar ticker symbolen
 coin1 = tickers[name1]
@@ -472,6 +447,32 @@ else:
     stability_assessment = "🔴 Instabiel - Correlatie varieert sterk over tijd"
 
 st.write(f"**Stabiliteit beoordeling:** {stability_assessment}")
+
+st.markdown("---")
+
+# Samenvatting van de pairs trading analyse
+st.header("📊 Samenvatting van de pairs trading analyse")
+
+st.markdown(f"""
+- **Asset 1:** {name1} ({coin1})
+- **Asset 2:** {name2} ({coin2})
+- **Periode:** {start_date} tot {end_date}
+- **Data punten:** {len(df)}
+
+**Regressie resultaten:**
+- Alpha: {alpha:.6f}
+- Beta: {beta:.6f}
+- R²: {r_squared:.4f}
+- Pearson correlatie: {pearson_corr:.4f}
+
+**Spread statistieken:**
+- Gemiddelde spread: {spread_mean:.4f}
+- Standaarddeviatie spread: {spread_std:.4f}
+
+**Laatste z-score:** {df['zscore'].iloc[-1]:.2f}
+
+**Huidige signaal:** {current_position}
+""")
 
 # Optioneel: mogelijkheid om data te exporteren
 if st.button("Exporteer analyse naar CSV"):
