@@ -641,7 +641,7 @@ try:
     # Prijs en Z-score grafieken
     col1, col2 = st.columns(2)
 
-    with col1:
+with col1:
         fig_prices = go.Figure()
         fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
         fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
