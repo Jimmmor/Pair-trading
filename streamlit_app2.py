@@ -241,6 +241,13 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
 
     return df, trades
 
+# Data ophalen
+data1 = load_data(coin1, periode, interval)
+data2 = load_data(coin2, periode, interval)
+
+# Data preprocessen
+df = preprocess_data(data1, data2)
+
 df_backtest, trades = run_backtest(
     df,
     zscore_entry_threshold,
@@ -251,6 +258,13 @@ df_backtest, trades = run_backtest(
     stop_loss_pct,
     take_profit_pct
 )
+st.header("📈 Backtest Resultaten")
+if trades:
+    df_trades = pd.DataFrame(trades)
+    st.dataframe(df_trades)
+    st.write(f"Portfolio eindwaarde: ${df_backtest['portfolio_value'].iloc[-1]:.2f}")
+else:
+    st.write("Geen trades gevonden in de backtestperiode.")
 
 # === ORIGINELE ANALYSE SECTIE ===
 st.header("📊 Huidige Analyse")
