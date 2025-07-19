@@ -641,7 +641,7 @@ try:
     # Prijs en Z-score grafieken
     col1, col2 = st.columns(2)
 
-with col1:
+    with col1:
         fig_prices = go.Figure()
         fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
         fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
@@ -655,7 +655,7 @@ with col1:
         
     st.plotly_chart(fig_prices, use_container_width=True)
 
-with col2:
+    with col2:
     fig_zscore = go.Figure()
     fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-score', line=dict(color='purple')))
     fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'), annotation_text='Entry Threshold')
