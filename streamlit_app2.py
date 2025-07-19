@@ -86,31 +86,86 @@ def preprocess_data(data1, data2):
     
     return df
 
+def validate_data_for_regression(X, y):
+    """
+    Valideer data voor linear regression
+    """
+    # Check for empty data
+    if len(X) == 0 or len(y) == 0:
+        raise ValueError("Empty data arrays")
+    
+    # Check for minimum data points
+    if len(X) < 10:
+        raise ValueError("Insufficient data points for regression (minimum 10 required)")
+    
+    # Check for NaN or infinite values
+    if np.any(np.isnan(X)) or np.any(np.isnan(y)):
+        raise ValueError("Data contains NaN values")
+    
+    if np.any(np.isinf(X)) or np.any(np.isinf(y)):
+        raise ValueError("Data contains infinite values")
+    
+    # Check for zero variance
+    if np.std(X.flatten()) == 0:
+        raise ValueError("X data has zero variance")
+    
+    if np.std(y) == 0:
+        raise ValueError("Y data has zero variance")
+    
+    # Check for identical values
+    if len(np.unique(X.flatten())) < 2:
+        raise ValueError("X data contains insufficient unique values")
+    
+    return True
+
 def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
     """
-    Verbeterde backtest functie met correcte P&L berekening
+    Verbeterde backtest functie met correcte P&L berekening en data validatie
     """
-    # Clean data
-    df = df.dropna(subset=['price1', 'price2']).reset_index(drop=True)
-    
-    # Bereken spread en z-score
-    X = df['price1'].values.reshape(-1, 1)
-    y = df['price2'].values
-    
-    # Validatie
-    if np.any(np.isnan(X)) or np.any(np.isnan(y)) or np.any(np.isinf(X)) or np.any(np.isinf(y)):
-        raise ValueError("Invalid data found (NaN or infinite values)")
-    
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    alpha = model.intercept_
-    beta = model.coef_[0]
-    
-    df['spread'] = df['price2'] - (alpha + beta * df['price1'])
-    spread_mean = df['spread'].mean()
-    spread_std = df['spread'].std()
-    df['zscore'] = (df['spread'] - spread_mean) / spread_std
+    try:
+        # Clean data en validatie
+        df = df.dropna(subset=['price1', 'price2']).reset_index(drop=True)
+        
+        if len(df) < 10:
+            raise ValueError(f"Insufficient data points: {len(df)} (minimum 10 required)")
+        
+        # Bereken spread en z-score
+        X = df['price1'].values.reshape(-1, 1)
+        y = df['price2'].values
+        
+        # Valideer data voor regression
+        validate_data_for_regression(X, y)
+        
+        # Fit linear regression model
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        alpha = model.intercept_
+        beta = model.coef_[0]
+        
+        # Bereken spread
+        df['spread'] = df['price2'] - (alpha + beta * df['price1'])
+        
+        # Check of spread valide is
+        if df['spread'].std() == 0:
+            raise ValueError("Spread has zero variance - cannot calculate z-score")
+        
+        spread_mean = df['spread'].mean()
+        spread_std = df['spread'].std()
+        df['zscore'] = (df['spread'] - spread_mean) / spread_std
+        
+        # Check voor NaN values in z-score
+        if df['zscore'].isna().any():
+            raise ValueError("Z-score calculation resulted in NaN values")
+        
+    except Exception as e:
+        st.error(f"Error in data preparation for backtesting: {str(e)}")
+        # Return empty results
+        empty_df = df.copy() if 'df' in locals() else pd.DataFrame()
+        if not empty_df.empty:
+            empty_df['portfolio_value'] = [initial_capital] * len(empty_df)
+            empty_df['position'] = [0] * len(empty_df)
+        return empty_df, []
     
     # Backtest variabelen
     cash = initial_capital
@@ -353,20 +408,34 @@ def calculate_backtest_metrics(trades_df, df_backtest, initial_capital):
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
 
+# Check if data was successfully loaded
+if data1.empty or data2.empty:
+    st.error("Kon data niet ophalen. Controleer de ticker symbolen en internetverbinding.")
+    st.stop()
+
 # Data preprocessen
 df = preprocess_data(data1, data2)
 
+# Check if preprocessed data is valid
+if df.empty:
+    st.error("Geen geldige data na preprocessing. Controleer of de gekozen coins data hebben in de geselecteerde periode.")
+    st.stop()
+
 # Backtest uitvoeren
-df_backtest, trades = run_backtest(
-    df,
-    zscore_entry_threshold,
-    zscore_exit_threshold,
-    initial_capital,
-    transaction_cost,
-    max_position_size,
-    stop_loss_pct,
-    take_profit_pct
-)
+try:
+    df_backtest, trades = run_backtest(
+        df,
+        zscore_entry_threshold,
+        zscore_exit_threshold,
+        initial_capital,
+        transaction_cost,
+        max_position_size,
+        stop_loss_pct,
+        take_profit_pct
+    )
+except Exception as e:
+    st.error(f"Fout tijdens backtest: {str(e)}")
+    st.stop()
 
 # === BACKTESTING RESULTATEN SECTIE ===
 st.header("🔙 Backtesting Resultaten")
@@ -421,32 +490,34 @@ if len(trades) > 0:
     # Voeg trade markers toe
     for trade in trades:
         # Entry marker
-        fig_portfolio.add_trace(go.Scatter(
-            x=[trade['Entry Date']],
-            y=[df_backtest.loc[trade['Entry Date'], 'portfolio_value']],
-            mode='markers',
-            marker=dict(
-                color='green' if trade['Position'] == 'Long Spread' else 'red',
-                size=10,
-                symbol='triangle-up' if trade['Position'] == 'Long Spread' else 'triangle-down'
-            ),
-            name=f"Entry {trade['Position']}",
-            showlegend=False
-        ))
+        if trade['Entry Date'] in df_backtest.index:
+            fig_portfolio.add_trace(go.Scatter(
+                x=[trade['Entry Date']],
+                y=[df_backtest.loc[trade['Entry Date'], 'portfolio_value']],
+                mode='markers',
+                marker=dict(
+                    color='green' if trade['Position'] == 'Long Spread' else 'red',
+                    size=10,
+                    symbol='triangle-up' if trade['Position'] == 'Long Spread' else 'triangle-down'
+                ),
+                name=f"Entry {trade['Position']}",
+                showlegend=False
+            ))
         
         # Exit marker
-        fig_portfolio.add_trace(go.Scatter(
-            x=[trade['Exit Date']],
-            y=[df_backtest.loc[trade['Exit Date'], 'portfolio_value']],
-            mode='markers',
-            marker=dict(
-                color='blue',
-                size=8,
-                symbol='x'
-            ),
-            name="Exit",
-            showlegend=False
-        ))
+        if trade['Exit Date'] in df_backtest.index:
+            fig_portfolio.add_trace(go.Scatter(
+                x=[trade['Exit Date']],
+                y=[df_backtest.loc[trade['Exit Date'], 'portfolio_value']],
+                mode='markers',
+                marker=dict(
+                    color='blue',
+                    size=8,
+                    symbol='x'
+                ),
+                name="Exit",
+                showlegend=False
+            ))
     
     fig_portfolio.update_layout(
         title="Portfolio Value Over Time met Trade Markers",
@@ -501,82 +572,87 @@ else:
 # === ORIGINELE ANALYSE SECTIE ===
 st.header("📊 Huidige Analyse")
 
-# Bereken spread en z-score voor huidige analyse
-X = df['price1'].values.reshape(-1, 1)
-y = df['price2'].values
-
-model = LinearRegression()
-model.fit(X, y)
-
-alpha = model.intercept_
-beta = model.coef_[0]
-r_squared = model.score(X, y)
-
-# Spread berekenen
-df['spread'] = df['price2'] - (alpha + beta * df['price1'])
-spread_mean = df['spread'].mean()
-spread_std = df['spread'].std()
-df['zscore'] = (df['spread'] - spread_mean) / spread_std
-
-# Rolling correlatie
-df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
-pearson_corr = df['price1'].corr(df['price2'])
-
-# Trade signalen
-df['long_entry'] = df['zscore'] < -zscore_entry_threshold
-df['short_entry'] = df['zscore'] > zscore_entry_threshold
-df['exit'] = df['zscore'].abs() < zscore_exit_threshold
-
-# Huidige positie
-if df['long_entry'].iloc[-1]:
-    current_position = f"Long Spread (long {name2}, short {name1})"
-elif df['short_entry'].iloc[-1]:
-    current_position = f"Short Spread (short {name2}, long {name1})"
-elif df['exit'].iloc[-1]:
-    current_position = "Exit positie"
-else:
-    current_position = "Geen duidelijk signaal"
-
-# Huidige signaal
-st.subheader("🚦 Huidige Trade Signaal")
-st.write(f"**Z-score laatste waarde:** {df['zscore'].iloc[-1]:.2f}")
-st.write(f"**Signaal:** {current_position}")
-
-# Spread grafiek met entry/exit levels
-entry_long_level = -zscore_entry_threshold * spread_std + spread_mean
-entry_short_level = zscore_entry_threshold * spread_std + spread_mean
-exit_level_pos = zscore_exit_threshold * spread_std + spread_mean
-exit_level_neg = -zscore_exit_threshold * spread_std + spread_mean
-
-fig_signal = go.Figure()
-fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
-
-fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), 
-                    annotation_text='Long Entry', annotation_position='bottom left')
-fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), 
-                    annotation_text='Short Entry', annotation_position='top left')
-fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), 
-                    annotation_text='Exit', annotation_position='top right')
-fig_signal.add_hline(y=exit_level_neg, line=dict(color='blue', dash='dot'), 
-                    annotation_text='Exit', annotation_position='bottom right')
-
-fig_signal.update_layout(title="Spread met Entry en Exit Niveaus", yaxis_title="Spread", xaxis_title="Datum")
-st.plotly_chart(fig_signal, use_container_width=True)
-
-# Prijs en Z-score grafieken
-col1, col2 = st.columns(2)
-
-with col1:
-    fig_prices = go.Figure()
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
+try:
+    # Bereken spread en z-score voor huidige analyse
+    X = df['price1'].values.reshape(-1, 1)
+    y = df['price2'].values
     
-    fig_prices.update_layout(
-        title="Prijsverloop",
-        xaxis_title="Datum",
-        yaxis_title=f"{name1} Prijs (USD)",
-        yaxis2=dict(title=f"{name2} Prijs (USD)", overlaying='y', side='right')
-    )
+    # Valideer data
+    validate_data_for_regression(X, y)
+    
+    model = LinearRegression()
+    model.fit(X, y)
+
+    alpha = model.intercept_
+    beta = model.coef_[0]
+    r_squared = model.score(X, y)
+
+    # Spread berekenen
+    df['spread'] = df['price2'] - (alpha + beta * df['price1'])
+    spread_mean = df['spread'].mean()
+    spread_std = df['spread'].std()
+    df['zscore'] = (df['spread'] - spread_mean) / spread_std
+
+    # Rolling correlatie
+    df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
+    pearson_corr = df['price1'].corr(df['price2'])
+
+    # Trade signalen
+    df['long_entry'] = df['zscore'] < -zscore_entry_threshold
+    df['short_entry'] = df['zscore'] > zscore_entry_threshold
+    df['exit'] = df['zscore'].abs() < zscore_exit_threshold
+
+    # Huidige positie
+    if df['long_entry'].iloc[-1]:
+        current_position = f"Long Spread (long {name2}, short {name1})"
+    elif df['short_entry'].iloc[-1]:
+        current_position = f"Short Spread (short {name2}, long {name1})"
+    elif df['exit'].iloc[-1]:
+        current_position = "Exit positie"
+    else:
+        current_position = "Geen duidelijk signaal"
+
+    # Huidige signaal
+    st.subheader("🚦 Huidige Trade Signaal")
+    st.write(f"**Z-score laatste waarde:** {df['zscore'].iloc[-1]:.2f}")
+    st.write(f"**Signaal:** {current_position}")
+
+    # Spread grafiek met entry/exit levels
+    entry_long_level = -zscore_entry_threshold * spread_std + spread_mean
+    entry_short_level = zscore_entry_threshold * spread_std + spread_mean
+    exit_level_pos = zscore_exit_threshold * spread_std + spread_mean
+    exit_level_neg = -zscore_exit_threshold * spread_std + spread_mean
+
+    fig_signal = go.Figure()
+    fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
+
+    fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), 
+                        annotation_text='Long Entry', annotation_position='bottom left')
+    fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), 
+                        annotation_text='Short Entry', annotation_position='top left')
+    fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), 
+                        annotation_text='Exit', annotation_position='top right')
+    fig_signal.add_hline(y=exit_level_neg, line=dict(color='blue', dash='dot'), 
+                        annotation_text='Exit', annotation_position='bottom right')
+
+    fig_signal.update_layout(title="Spread met Entry en Exit Niveaus", yaxis_title="Spread", xaxis_title="Datum")
+    st.plotly_chart(fig_signal, use_container_width=True)
+
+    # Prijs en Z-score grafieken
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig_prices = go.Figure()
+        fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
+        fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
+        
+        fig_prices.update_layout(
+            title="Prijsverloop",
+            xaxis_title="Datum",
+            yaxis_title=f"{name1} Prijs (USD)",
+            yaxis2=dict(title=f"{name2} Prijs (USD)", overlaying='y', side='right')
+        )
+        
     st.plotly_chart(fig_prices, use_container_width=True)
 
 with col2:
