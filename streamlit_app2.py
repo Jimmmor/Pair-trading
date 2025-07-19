@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 from datetime import datetime, timedelta
-import tickers from tickers
+from tickers import tickers
 
 # Pagina-instellingen
 st.set_page_config(layout="wide")
