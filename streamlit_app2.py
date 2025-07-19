@@ -235,7 +235,8 @@ df_backtest, trades = run_backtest(
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
 df = preprocess_data(data1, data2)
-    
+
+df_backtest, trades = run_backtest(
     df,
     zscore_entry_threshold,
     zscore_exit_threshold,
@@ -245,6 +246,7 @@ df = preprocess_data(data1, data2)
     stop_loss_pct,
     take_profit_pct
 )
+
 # === ORIGINELE ANALYSE SECTIE ===
 st.header("📊 Huidige Analyse")
 
