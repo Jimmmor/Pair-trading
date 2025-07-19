@@ -230,15 +230,14 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
     
     return df, trades
 
-# Voer backtesting uit
 df_backtest, trades = run_backtest(
     df,
-    zscore_entry_threshold, 
-    zscore_exit_threshold, 
-    initial_capital, 
-    transaction_cost, 
-    max_position_size, 
-    stop_loss_pct, 
+    zscore_entry_threshold,
+    zscore_exit_threshold,
+    initial_capital,
+    transaction_cost,
+    max_position_size,
+    stop_loss_pct,
     take_profit_pct
 )
 # === ORIGINELE ANALYSE SECTIE ===
