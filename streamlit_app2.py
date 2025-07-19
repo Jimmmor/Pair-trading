@@ -269,11 +269,11 @@ df['exit'] = df['zscore'].abs() < zscore_exit_threshold
 
 # Huidige positie
 if df['long_entry'].iloc[-1]:
-    current_position = f"Long Spread (koop {name2}, verkoop {name1})"
+    current_position = f"Long Spread (long {name2}, short {name1})"
 elif df['short_entry'].iloc[-1]:
-    current_position = f"Short Spread (verkoop {name2}, koop {name1})"
+    current_position = f"Short Spread (short {name2}, long {name1})"
 elif df['exit'].iloc[-1]:
-    current_position = "Exit positie (geen trade)"
+    current_position = "Exit positie"
 else:
     current_position = "Geen duidelijk signaal"
 
