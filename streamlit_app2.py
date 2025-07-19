@@ -238,155 +238,6 @@ df_backtest, trades = run_backtest(
     stop_loss_pct, 
     take_profit_pct
 )
-
-# === BACKTESTING RESULTATEN SECTIE ===
-st.header("🔙 Backtesting Resultaten")
-
-# Bereken key metrics
-if len(trades) > 0:
-    trades_df = pd.DataFrame(trades)
-    
-    # Portfolio metrics
-    final_value = df_backtest['portfolio_value'].iloc[-1]
-    total_return = ((final_value - initial_capital) / initial_capital) * 100
-    
-    # Trade metrics
-    winning_trades = trades_df[trades_df['P&L'] > 0]
-    losing_trades = trades_df[trades_df['P&L'] < 0]
-    
-    win_rate = (len(winning_trades) / len(trades_df)) * 100 if len(trades_df) > 0 else 0
-    avg_win = winning_trades['P&L'].mean() if len(winning_trades) > 0 else 0
-    avg_loss = losing_trades['P&L'].mean() if len(losing_trades) > 0 else 0
-    profit_factor = abs(winning_trades['P&L'].sum() / losing_trades['P&L'].sum()) if len(losing_trades) > 0 and losing_trades['P&L'].sum() != 0 else float('inf')
-    
-    # Risk metrics
-    returns = df_backtest['portfolio_value'].pct_change().dropna()
-    volatility = returns.std() * np.sqrt(252)  # Annualized volatility
-    sharpe_ratio = (total_return / 100) / volatility if volatility > 0 else 0
-    
-    max_drawdown = ((df_backtest['portfolio_value'].cummax() - df_backtest['portfolio_value']) / df_backtest['portfolio_value'].cummax()).max() * 100
-    
-    # Display key metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Totaal Rendement", f"{total_return:.2f}%")
-        st.metric("Aantal Trades", len(trades_df))
-        st.metric("Win Rate", f"{win_rate:.1f}%")
-    
-    with col2:
-        st.metric("Eindwaarde", f"${final_value:,.0f}")
-        st.metric("Gemiddelde Win", f"${avg_win:.0f}")
-        st.metric("Gemiddelde Loss", f"${avg_loss:.0f}")
-    
-    with col3:
-        st.metric("Profit Factor", f"{profit_factor:.2f}")
-        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
-        st.metric("Max Drawdown", f"{max_drawdown:.2f}%")
-    
-    with col4:
-        st.metric("Volatiliteit", f"{volatility:.2f}")
-        avg_holding_period = trades_df['Days Held'].mean()
-        st.metric("Gem. Holding Period", f"{avg_holding_period:.1f} dagen")
-        total_transaction_costs = len(trades_df) * initial_capital * (transaction_cost / 100) * 2
-        st.metric("Transactiekosten", f"${total_transaction_costs:.0f}")
-    
-    # Portfolio value grafiek
-    fig_portfolio = go.Figure()
-    
-    fig_portfolio.add_trace(go.Scatter(
-        x=df_backtest.index,
-        y=df_backtest['portfolio_value'],
-        mode='lines',
-        name='Portfolio Value',
-        line=dict(color='green', width=2)
-    ))
-    
-    # Buy and hold benchmark
-    buy_hold_value = initial_capital * (df_backtest['price1'].iloc[-1] / df_backtest['price1'].iloc[0])
-    fig_portfolio.add_hline(y=buy_hold_value, line_dash="dash", line_color="blue", 
-                           annotation_text=f"Buy & Hold {name1}: ${buy_hold_value:,.0f}")
-    
-    # Voeg trade markers toe
-    for trade in trades:
-        # Entry marker
-        fig_portfolio.add_trace(go.Scatter(
-            x=[trade['Entry Date']],
-            y=[df_backtest.loc[trade['Entry Date'], 'portfolio_value']],
-            mode='markers',
-            marker=dict(
-                color='green' if trade['Position'] == 'Long Spread' else 'red',
-                size=10,
-                symbol='triangle-up' if trade['Position'] == 'Long Spread' else 'triangle-down'
-            ),
-            name=f"Entry {trade['Position']}",
-            showlegend=False
-        ))
-        
-        # Exit marker
-        fig_portfolio.add_trace(go.Scatter(
-            x=[trade['Exit Date']],
-            y=[df_backtest.loc[trade['Exit Date'], 'portfolio_value']],
-            mode='markers',
-            marker=dict(
-                color='blue',
-                size=8,
-                symbol='x'
-            ),
-            name="Exit",
-            showlegend=False
-        ))
-    
-    fig_portfolio.update_layout(
-        title="Portfolio Value Over Time met Trade Markers",
-        xaxis_title="Datum",
-        yaxis_title="Portfolio Value (USD)",
-        hovermode='x unified'
-    )
-    
-    st.plotly_chart(fig_portfolio, use_container_width=True)
-    
-    # Trades tabel
-    st.subheader("📋 Trade History")
-    
-    # Maak trades tabel meer leesbaar
-    trades_display = trades_df.copy()
-    trades_display['Entry Date'] = trades_display['Entry Date'].dt.strftime('%Y-%m-%d')
-    trades_display['Exit Date'] = trades_display['Exit Date'].dt.strftime('%Y-%m-%d')
-    trades_display['P&L'] = trades_display['P&L'].apply(lambda x: f"${x:,.0f}")
-    trades_display['Position Size'] = trades_display['Position Size'].apply(lambda x: f"${x:,.0f}")
-    trades_display['P&L %'] = trades_display['P&L %'].apply(lambda x: f"{x:.2f}%")
-    trades_display['Entry Z-score'] = trades_display['Entry Z-score'].apply(lambda x: f"{x:.2f}")
-    trades_display['Exit Z-score'] = trades_display['Exit Z-score'].apply(lambda x: f"{x:.2f}")
-    
-    st.dataframe(trades_display, use_container_width=True)
-    
-    # P&L distributie
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        fig_pnl = px.histogram(
-            trades_df, 
-            x='P&L %', 
-            nbins=20,
-            title="P&L Distributie (%)",
-            labels={'P&L %': 'P&L Percentage', 'count': 'Aantal Trades'}
-        )
-        st.plotly_chart(fig_pnl, use_container_width=True)
-    
-    with col2:
-        fig_holding = px.histogram(
-            trades_df, 
-            x='Days Held', 
-            nbins=15,
-            title="Holding Period Distributie",
-            labels={'Days Held': 'Dagen Gehouden', 'count': 'Aantal Trades'}
-        )
-        st.plotly_chart(fig_holding, use_container_width=True)
-
-else:
-    st.warning("Geen trades uitgevoerd in de backtesting periode. Probeer andere parameters.")
-
 # === ORIGINELE ANALYSE SECTIE ===
 st.header("📊 Huidige Analyse")
 
@@ -503,6 +354,155 @@ with col3:
     st.metric("Returns Correlatie", f"{returns_corr:.4f}")
     st.metric("Volatiliteit Ratio", f"{volatility_ratio:.4f}")
     st.metric("Spread Volatiliteit", f"{spread_std:.4f}")
+# === BACKTESTING RESULTATEN SECTIE ===
+st.header("🔙 Backtesting Resultaten")
+
+# Bereken key metrics
+if len(trades) > 0:
+    trades_df = pd.DataFrame(trades)
+    
+    # Portfolio metrics
+    final_value = df_backtest['portfolio_value'].iloc[-1]
+    total_return = ((final_value - initial_capital) / initial_capital) * 100
+    
+    # Trade metrics
+    winning_trades = trades_df[trades_df['P&L'] > 0]
+    losing_trades = trades_df[trades_df['P&L'] < 0]
+    
+    win_rate = (len(winning_trades) / len(trades_df)) * 100 if len(trades_df) > 0 else 0
+    avg_win = winning_trades['P&L'].mean() if len(winning_trades) > 0 else 0
+    avg_loss = losing_trades['P&L'].mean() if len(losing_trades) > 0 else 0
+    profit_factor = abs(winning_trades['P&L'].sum() / losing_trades['P&L'].sum()) if len(losing_trades) > 0 and losing_trades['P&L'].sum() != 0 else float('inf')
+    
+    # Risk metrics
+    returns = df_backtest['portfolio_value'].pct_change().dropna()
+    volatility = returns.std() * np.sqrt(252)  # Annualized volatility
+    sharpe_ratio = (total_return / 100) / volatility if volatility > 0 else 0
+    
+    max_drawdown = ((df_backtest['portfolio_value'].cummax() - df_backtest['portfolio_value']) / df_backtest['portfolio_value'].cummax()).max() * 100
+    
+    # Display key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Totaal Rendement", f"{total_return:.2f}%")
+        st.metric("Aantal Trades", len(trades_df))
+        st.metric("Win Rate", f"{win_rate:.1f}%")
+    
+    with col2:
+        st.metric("Eindwaarde", f"${final_value:,.0f}")
+        st.metric("Gemiddelde Win", f"${avg_win:.0f}")
+        st.metric("Gemiddelde Loss", f"${avg_loss:.0f}")
+    
+    with col3:
+        st.metric("Profit Factor", f"{profit_factor:.2f}")
+        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
+        st.metric("Max Drawdown", f"{max_drawdown:.2f}%")
+    
+    with col4:
+        st.metric("Volatiliteit", f"{volatility:.2f}")
+        avg_holding_period = trades_df['Days Held'].mean()
+        st.metric("Gem. Holding Period", f"{avg_holding_period:.1f} dagen")
+        total_transaction_costs = len(trades_df) * initial_capital * (transaction_cost / 100) * 2
+        st.metric("Transactiekosten", f"${total_transaction_costs:.0f}")
+    
+    # Portfolio value grafiek
+    fig_portfolio = go.Figure()
+    
+    fig_portfolio.add_trace(go.Scatter(
+        x=df_backtest.index,
+        y=df_backtest['portfolio_value'],
+        mode='lines',
+        name='Portfolio Value',
+        line=dict(color='green', width=2)
+    ))
+    
+    # Buy and hold benchmark
+    buy_hold_value = initial_capital * (df_backtest['price1'].iloc[-1] / df_backtest['price1'].iloc[0])
+    fig_portfolio.add_hline(y=buy_hold_value, line_dash="dash", line_color="blue", 
+                           annotation_text=f"Buy & Hold {name1}: ${buy_hold_value:,.0f}")
+    
+    # Voeg trade markers toe
+    for trade in trades:
+        # Entry marker
+        fig_portfolio.add_trace(go.Scatter(
+            x=[trade['Entry Date']],
+            y=[df_backtest.loc[trade['Entry Date'], 'portfolio_value']],
+            mode='markers',
+            marker=dict(
+                color='green' if trade['Position'] == 'Long Spread' else 'red',
+                size=10,
+                symbol='triangle-up' if trade['Position'] == 'Long Spread' else 'triangle-down'
+            ),
+            name=f"Entry {trade['Position']}",
+            showlegend=False
+        ))
+        
+        # Exit marker
+        fig_portfolio.add_trace(go.Scatter(
+            x=[trade['Exit Date']],
+            y=[df_backtest.loc[trade['Exit Date'], 'portfolio_value']],
+            mode='markers',
+            marker=dict(
+                color='blue',
+                size=8,
+                symbol='x'
+            ),
+            name="Exit",
+            showlegend=False
+        ))
+    
+    fig_portfolio.update_layout(
+        title="Portfolio Value Over Time met Trade Markers",
+        xaxis_title="Datum",
+        yaxis_title="Portfolio Value (USD)",
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_portfolio, use_container_width=True)
+    
+    # Trades tabel
+    st.subheader("Trade History")
+    
+    # Maak trades tabel meer leesbaar
+    trades_display = trades_df.copy()
+    trades_display['Entry Date'] = trades_display['Entry Date'].dt.strftime('%Y-%m-%d')
+    trades_display['Exit Date'] = trades_display['Exit Date'].dt.strftime('%Y-%m-%d')
+    trades_display['P&L'] = trades_display['P&L'].apply(lambda x: f"${x:,.0f}")
+    trades_display['Position Size'] = trades_display['Position Size'].apply(lambda x: f"${x:,.0f}")
+    trades_display['P&L %'] = trades_display['P&L %'].apply(lambda x: f"{x:.2f}%")
+    trades_display['Entry Z-score'] = trades_display['Entry Z-score'].apply(lambda x: f"{x:.2f}")
+    trades_display['Exit Z-score'] = trades_display['Exit Z-score'].apply(lambda x: f"{x:.2f}")
+    
+    st.dataframe(trades_display, use_container_width=True)
+    
+    # P&L distributie
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig_pnl = px.histogram(
+            trades_df, 
+            x='P&L %', 
+            nbins=20,
+            title="P&L Distributie (%)",
+            labels={'P&L %': 'P&L Percentage', 'count': 'Aantal Trades'}
+        )
+        st.plotly_chart(fig_pnl, use_container_width=True)
+    
+    with col2:
+        fig_holding = px.histogram(
+            trades_df, 
+            x='Days Held', 
+            nbins=15,
+            title="Holding Period Distributie",
+            labels={'Days Held': 'Dagen Gehouden', 'count': 'Aantal Trades'}
+        )
+        st.plotly_chart(fig_holding, use_container_width=True)
+
+else:
+    st.warning("Geen trades uitgevoerd in de backtesting periode. Probeer andere parameters.")
+
+
 
 # Export functionaliteit
 if st.button("Exporteer analyse naar CSV"):
