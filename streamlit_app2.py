@@ -232,7 +232,7 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
 
 # Voer backtesting uit
 df_backtest, trades = run_backtest(
-    df, 
+    df,
     zscore_entry_threshold, 
     zscore_exit_threshold, 
     initial_capital, 
