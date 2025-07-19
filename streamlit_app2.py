@@ -230,8 +230,6 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
     
     return df, trades
 
-df_backtest, trades = run_backtest(
-
 data1 = load_data(coin1, periode, interval)
 data2 = load_data(coin2, periode, interval)
 df = preprocess_data(data1, data2)
