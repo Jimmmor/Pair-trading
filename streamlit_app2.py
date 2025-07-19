@@ -85,7 +85,6 @@ def preprocess_data(data1, data2):
     
     return df
 
-# Backtesting functie
 def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
     # Bereken spread en z-score
     X = df['price1'].values.reshape(-1, 1)
@@ -107,6 +106,8 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
     position = 0  # 0 = geen positie, 1 = long spread, -1 = short spread
     position_size = 0
     entry_price_spread = 0
+    entry_price_coin1 = 0
+    entry_price_coin2 = 0
     entry_date = None
     
     # Tracking variabelen
@@ -127,12 +128,16 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
             if current_zscore < -entry_threshold:  # Long spread signaal
                 position = 1
                 entry_price_spread = current_spread
+                entry_price_coin1 = df['price1'].iloc[i]
+                entry_price_coin2 = df['price2'].iloc[i]
                 entry_date = current_date
                 position_size = min(max_position_value, portfolio_value * 0.95)  # 95% om kosten te dekken
                 
             elif current_zscore > entry_threshold:  # Short spread signaal
                 position = -1
                 entry_price_spread = current_spread
+                entry_price_coin1 = df['price1'].iloc[i]
+                entry_price_coin2 = df['price2'].iloc[i]
                 entry_date = current_date
                 position_size = min(max_position_value, portfolio_value * 0.95)
         
@@ -146,35 +151,46 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
                 exit_trade = True
                 exit_reason = "Z-score exit"
             
-            # Stop loss check
+            # Stop loss en take profit check (gebaseerd op spread % verandering)
             if position == 1:  # Long spread
-                pnl_pct = ((current_spread - entry_price_spread) / abs(entry_price_spread)) * 100
-                if pnl_pct < -stop_loss_pct:
+                pnl_pct_spread = ((current_spread - entry_price_spread) / abs(entry_price_spread)) * 100
+                if pnl_pct_spread < -stop_loss_pct:
                     exit_trade = True
                     exit_reason = "Stop loss"
-                elif pnl_pct > take_profit_pct:
+                elif pnl_pct_spread > take_profit_pct:
                     exit_trade = True
                     exit_reason = "Take profit"
             
             elif position == -1:  # Short spread
-                pnl_pct = ((entry_price_spread - current_spread) / abs(entry_price_spread)) * 100
-                if pnl_pct < -stop_loss_pct:
+                pnl_pct_spread = ((entry_price_spread - current_spread) / abs(entry_price_spread)) * 100
+                if pnl_pct_spread < -stop_loss_pct:
                     exit_trade = True
                     exit_reason = "Stop loss"
-                elif pnl_pct > take_profit_pct:
+                elif pnl_pct_spread > take_profit_pct:
                     exit_trade = True
                     exit_reason = "Take profit"
             
             # Execute exit
             if exit_trade:
-                # Bereken P&L
-                if position == 1:  # Long spread
-                    pnl = ((current_spread - entry_price_spread) / abs(entry_price_spread)) * position_size
-                else:  # Short spread
-                    pnl = ((entry_price_spread - current_spread) / abs(entry_price_spread)) * position_size
+                exit_price_coin1 = df['price1'].iloc[i]
+                exit_price_coin2 = df['price2'].iloc[i]
                 
-                # Transactiekosten aftrekken
-                transaction_costs = position_size * (transaction_cost / 100) * 2  # Entry en exit
+                # Bereken units per coin bij openen positie
+                units_coin1 = position_size / entry_price_coin1
+                units_coin2 = position_size / entry_price_coin2
+                
+                # Bereken P&L afhankelijk van positie
+                if position == 1:  # Long spread = long coin2, short coin1
+                    pnl_coin1 = units_coin1 * (entry_price_coin1 - exit_price_coin1)  # short coin1
+                    pnl_coin2 = units_coin2 * (exit_price_coin2 - entry_price_coin2)  # long coin2
+                else:  # Short spread = short coin2, long coin1
+                    pnl_coin1 = units_coin1 * (exit_price_coin1 - entry_price_coin1)  # long coin1
+                    pnl_coin2 = units_coin2 * (entry_price_coin2 - exit_price_coin2)  # short coin2
+                
+                pnl = pnl_coin1 + pnl_coin2
+                
+                # Transactiekosten aftrekken (entry + exit)
+                transaction_costs = 2 * position_size * (transaction_cost / 100)
                 pnl -= transaction_costs
                 
                 # Update portfolio
@@ -196,36 +212,23 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
                     'Days Held': (current_date - entry_date).days
                 })
                 
-                # Reset position
+                # Reset positie
                 position = 0
                 position_size = 0
                 entry_price_spread = 0
+                entry_price_coin1 = 0
+                entry_price_coin2 = 0
                 entry_date = None
         
         # Track portfolio value en posities
         portfolio_values.append(portfolio_value)
         positions.append(position)
     
-    # Creëer results DataFrame
+    # Creëer resultaten DataFrame
     df['portfolio_value'] = portfolio_values
     df['position'] = positions
     
     return df, trades
-
-# Load data
-data1 = load_data(coin1, periode, interval)
-data2 = load_data(coin2, periode, interval)
-
-if data1.empty or data2.empty:
-    st.error("Geen data beschikbaar voor één of beide coins. Probeer een andere combinatie of periode.")
-    st.stop()
-
-# Preprocess data
-df = preprocess_data(data1, data2)
-
-if df.empty:
-    st.error("Geen overlappende data beschikbaar voor beide coins.")
-    st.stop()
 
 # Voer backtesting uit
 df_backtest, trades = run_backtest(
