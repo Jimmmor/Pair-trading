@@ -6,55 +6,11 @@ import plotly.graph_objects as go
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 from datetime import datetime, timedelta
+import tickers from tickers
 
 # Pagina-instellingen
 st.set_page_config(layout="wide")
 st.title("📈 Pairs Trading Monitor met Backtesting")
-
-# Beschikbare tickers
-tickers = {
-    "Bitcoin (BTC)": "BTC-USD",
-    "Ethereum (ETH)": "ETH-USD",
-    "Solana (SOL)": "SOL-USD",
-    "Cardano (ADA)": "ADA-USD",
-    "Dogecoin (DOGE)": "DOGE-USD",
-    "Polkadot (DOT)": "DOT-USD",
-    "Chainlink (LINK)": "LINK-USD",
-    "Litecoin (LTC)": "LTC-USD",
-    "Avalanche (AVAX)": "AVAX-USD",
-    "Shiba Inu (SHIB)": "SHIB-USD",
-    "TRON (TRX)": "TRX-USD",
-    "Uniswap (UNI)": "UNI-USD",
-    "Cosmos (ATOM)": "ATOM-USD",
-    "Stellar (XLM)": "XLM-USD",
-    "VeChain (VET)": "VET-USD",
-    "NEAR Protocol (NEAR)": "NEAR-USD",
-    "Aptos (APT)": "APT-USD",
-    "Filecoin (FIL)": "FIL-USD",
-    "The Graph (GRT)": "GRT-USD",
-    "Algorand (ALGO)": "ALGO-USD",
-    "Tezos (XTZ)": "XTZ-USD",
-    "Hedera (HBAR)": "HBAR-USD",
-    "Fantom (FTM)": "FTM-USD",
-    "EOS (EOS)": "EOS-USD",
-    "Zcash (ZEC)": "ZEC-USD",
-    "Dash (DASH)": "DASH-USD",
-    "Chiliz (CHZ)": "CHZ-USD",
-    "THETA (THETA)": "THETA-USD",
-    "Internet Computer (ICP)": "ICP-USD",
-    "Arbitrum (ARB)": "ARB-USD",
-    "Optimism (OP)": "OP-USD",
-    "Injective (INJ)": "INJ-USD",
-    "SUI (SUI)": "SUI-USD",
-    "Lido DAO (LDO)": "LDO-USD",
-    "Aave (AAVE)": "AAVE-USD",
-    "Maker (MKR)": "MKR-USD",
-    "Curve DAO (CRV)": "CRV-USD",
-    "1inch (1INCH)": "1INCH-USD",
-    "Gala (GALA)": "GALA-USD",
-    "Render (RNDR)": "RNDR-USD"
-}
-
 # Sidebar
 with st.sidebar:
     st.header("🔍 Kies een Coin Pair")
