@@ -654,16 +654,16 @@ try:
         )
         
     st.plotly_chart(fig_prices, use_container_width=True)
-
+    
     with col2:
-    fig_zscore = go.Figure()
-    fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-score', line=dict(color='purple')))
-    fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'), annotation_text='Entry Threshold')
-    fig_zscore.add_hline(y=-zscore_entry_threshold, line=dict(color='green', dash='dash'), annotation_text='Entry Threshold')
-    fig_zscore.add_hline(y=zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
-    fig_zscore.add_hline(y=-zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
-    fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
-    st.plotly_chart(fig_zscore, use_container_width=True)
+        fig_zscore = go.Figure()
+        fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-score', line=dict(color='purple')))
+        fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'), annotation_text='Entry Threshold')
+        fig_zscore.add_hline(y=-zscore_entry_threshold, line=dict(color='green', dash='dash'), annotation_text='Entry Threshold')
+        fig_zscore.add_hline(y=zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
+        fig_zscore.add_hline(y=-zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
+        fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
+        st.plotly_chart(fig_zscore, use_container_width=True)
 
 # Correlatie statistieken
 st.subheader("📈 Correlatie Statistieken")
