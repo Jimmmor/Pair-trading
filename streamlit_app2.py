@@ -7,6 +7,7 @@ import plotly.express as px
 from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
 from plotly.subplots import make_subplots
+from constants.tickers import tickers
 
 # Pagina-instellingen
 st.set_page_config(layout="wide")
@@ -137,34 +138,55 @@ class PairTradingCalculator:
         return risk_amount / price_diff if price_diff != 0 else 0
 
 @st.cache_data
-def load_data(ticker, period, interval):
+def load_data(ticker_key, period, interval):
+    """Laad data voor een ticker key uit het tickers dictionary"""
     try:
-        # Download data van Yahoo Finance
+        # Haal de echte ticker symbol op uit het tickers dict
+        ticker_symbol = tickers[ticker_key]
+        
+        # Download de data
         data = yf.download(
-            tickers=ticker,  # ticker is al een string zoals "BTC-USD"
+            tickers=ticker_symbol,
             period=period,
             interval=interval,
             progress=False
         )
-        # Return de Close prices als Series
-        return data['Close'].rename('price')
+        
+        # Behoud de originele return structuur
+        if isinstance(data.columns, pd.MultiIndex):
+            return data['Close'].iloc[:, 0].dropna()
+        return data['Close'].dropna()
+        
     except Exception as e:
-        st.error(f"Error loading {ticker}: {e}")
-        return pd.Series()  # Return een lege Series bij error
+        st.error(f"Fout bij ophalen data voor {ticker_key}: {e}")
+        return pd.Series()
 
-# Gebruik:
-data1 = load_data("BTC-USD", "1mo", "1d") 
-data2 = load_data("ETH-USD", "1mo", "1d")
+# Originele data verwerkingsfunctie
+def preprocess_data(data1, data2):
+    """Preprocessing zoals in originele code"""
+    if not isinstance(data1, pd.Series):
+        data1 = pd.Series(data1)
+    if not isinstance(data2, pd.Series):
+        data2 = pd.Series(data2)
+    
+    data1_aligned, data2_aligned = data1.align(data2, join='inner')
+    
+    df = pd.DataFrame({
+        'price1': data1_aligned,
+        'price2': data2_aligned
+    }).dropna()
+    
+    return df
+
+# Gebruik in de app - blijft identiek aan origineel
+data1 = load_data(name1, periode, interval)
+data2 = load_data(name2, periode, interval)
 
 if data1.empty or data2.empty:
-    st.error("Failed to load data for one or both assets")
+    st.error("Geen data beschikbaar voor één of beide coins")
     st.stop()
 
-# Combine data - CORRECTIE: gebruik de juiste kolomnamen
-df = pd.DataFrame({
-    'price1': data1,
-    'price2': data2
-}).dropna()
+df = preprocess_data(data1, data2)
 
 # Bereken trading parameters
 calculator = PairTradingCalculator(leverage=leverage, risk_per_trade=risk_per_trade)
