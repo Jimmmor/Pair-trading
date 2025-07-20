@@ -302,27 +302,26 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
                 pnl_percentage = (total_pnl / entry_info['position_size']) * 100
                 
                 # Log trade
-                trades.append({
-                    'Entry Date': entry_info['date'],
-                    'Exit Date': current_date,
-                    'Position': entry_info['type'],
-                    'Entry Z-score': entry_info['zscore'],
-                    'Exit Z-score': current_zscore,
-                    'Entry Spread': entry_info['spread'],
-                    'Exit Spread': df['spread'].iloc[i],
-                    'Position Size': entry_info['position_size'],
-                    'P&L': total_pnl,
-                    'P&L %': pnl_percentage,
-                    'Exit Reason': exit_reason,
-                    'Days Held': (current_date - entry_info['date']).days,
-                    'Entry Coin1 Price': entry_info['coin1_price'],
-                    'Exit Coin1 Price': current_price1,
-                    'Entry Coin2 Price': entry_info['coin2_price'],
-                    'Exit Coin2 Price': current_price2,
-                    'Coin1 Units': abs(entry_info['coin1_units']),
-                    'Coin2 Units': abs(entry_info['coin2_units'])
-                })
-                
+            trades.append({
+                'Entry Date': entry_info['date'],
+                'Exit Date': current_date,
+                'Position': entry_info['type'],
+                'Entry Z-score': entry_info['zscore'],
+                'Exit Z-score': current_zscore,
+                'Entry Spread': entry_info['spread'],
+                'Exit Spread': df['spread'].iloc[i],
+                'Position Size': entry_info['position_size'],
+                'P&L': total_pnl,
+                'P&L %': pnl_percentage,
+                'Exit Reason': exit_reason,
+                'Days Held': max(1, i - entry_info.get('index', 0)),  # FIX HIER
+                'Entry Coin1 Price': entry_info['coin1_price'],
+                'Exit Coin1 Price': current_price1,
+                'Entry Coin2 Price': entry_info['coin2_price'],
+                'Exit Coin2 Price': current_price2,
+                'Coin1 Units': abs(entry_info['coin1_units']),
+                'Coin2 Units': abs(entry_info['coin2_units'])
+            })
                 # Reset posities
                 coin1_position = 0
                 coin2_position = 0
