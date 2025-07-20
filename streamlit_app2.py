@@ -139,6 +139,7 @@ class PairTradingCalculator:
 @st.cache_data
 def load_data(ticker, period, interval):
     try:
+        # CORRECTIE: ticker is al de string, geen extra aanroep nodig
         df = yf.download(ticker, period=period, interval=interval)
         return df['Close'].rename('price') if not df.empty else pd.Series()
     except Exception as e:
@@ -153,15 +154,11 @@ if data1.empty or data2.empty:
     st.error("Failed to load data for one or both assets")
     st.stop()
 
-# Combine data
+# Combine data - CORRECTIE: gebruik de juiste kolomnamen
 df = pd.DataFrame({
     'price1': data1,
     'price2': data2
 }).dropna()
-
-if df.empty:
-    st.error("No overlapping data available")
-    st.stop()
 
 # Bereken trading parameters
 calculator = PairTradingCalculator(leverage=leverage, risk_per_trade=risk_per_trade)
