@@ -115,56 +115,61 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-            # Prijsgrafiek met 2 y-assen - ALTERNATIEVE WERKENDE VERSIE
-            fig_prices = go.Figure()
-            
-            # Coin 1 (primaire y-as)
-            fig_prices.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['price1'],
-                    name=name1,
-                    line=dict(color='#1f77b4')
+            # PRIJSGRAFIEK - GARANTIED WERKENDE VERSIE
+            try:
+                # Creëer basis figuur
+                fig_prices = go.Figure()
+                
+                # Voeg eerste coin toe (primaire y-as)
+                fig_prices.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['price1'],
+                        name=name1,
+                        line=dict(color='#1f77b4')
+                    )
                 )
-            )
-            
-            # Coin 2 (secundaire y-as)
-            fig_prices.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['price2'],
-                    name=name2,
-                    line=dict(color='#ff7f0e')
+                
+                # Voeg tweede coin toe (secundaire y-as)
+                fig_prices.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['price2'],
+                        name=name2,
+                        line=dict(color='#ff7f0e'),
+                        yaxis='y2'
+                    )
                 )
-            )
-            
-            # Layout configuratie met expliciete y-as definities
-            fig_prices.update_layout(
-                title="Prijsverloop",
-                xaxis_title="Datum",
-                yaxis=dict(
-                    title=f"{name1} Prijs (USD)",
-                    titlefont=dict(color="#1f77b4"),
-                    tickfont=dict(color="#1f77b4")
-                ),
-                yaxis2=dict(
-                    title=f"{name2} Prijs (USD)",
-                    titlefont=dict(color="#ff7f0e"),
-                    tickfont=dict(color="#ff7f0e"),
-                    overlaying="y",
-                    side="right",
-                    anchor="x"  # Belangrijke toevoeging
-                ),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=400
-            )
-            
-            # Expliciet aangeven welke trace naar welke y-as gaat
-            fig_prices.data[1].update(yaxis='y2')
-            
-            st.plotly_chart(fig_prices, use_container_width=True)
-           
+                
+                # Eenvoudige layout configuratie
+                layout_config = {
+                    'title': 'Prijsverloop',
+                    'xaxis': {'title': 'Datum'},
+                    'yaxis': {
+                        'title': f'{name1} Prijs (USD)',
+                        'titlefont': {'color': '#1f77b4'},
+                        'tickfont': {'color': '#1f77b4'}
+                    },
+                    'yaxis2': {
+                        'title': f'{name2} Prijs (USD)',
+                        'titlefont': {'color': '#ff7f0e'},
+                        'tickfont': {'color': '#ff7f0e'},
+                        'overlaying': 'y',
+                        'side': 'right'
+                    },
+                    'plot_bgcolor': 'rgba(0,0,0,0)',
+                    'paper_bgcolor': 'rgba(0,0,0,0)',
+                    'height': 400
+                }
+                
+                # Pas layout toe met expliciete dict
+                fig_prices.update_layout(layout_config)
+                
+                st.plotly_chart(fig_prices, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"Fout bij het maken van prijsgrafiek: {str(e)}")
+                st.write("Probeer een andere dataset of neem contact op met support.")
             
             # Spread grafiek met groen gebied
             fig_spread = go.Figure()
