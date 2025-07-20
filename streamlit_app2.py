@@ -665,7 +665,9 @@ try:
         fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
         st.plotly_chart(fig_zscore, use_container_width=True)
 
-# Correlatie statistieken
+except Exception as e:
+    st.error(f"Fout bij berekening: {str(e)}")
+    
 st.subheader("📈 Correlatie Statistieken")
 col1, col2, col3 = st.columns(3)
 
