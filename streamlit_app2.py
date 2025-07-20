@@ -115,93 +115,74 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-            fig_prices = go.Figure()
-            
-            # Coin 1 op primaire y-as (blauw)
-            fig_prices.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['price1'], 
-                name=name1, 
-                line=dict(color='#1f77b4', width=2)
-            ))
-            
-            # Coin 2 op secundaire y-as (rood/oranje)
-            fig_prices.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['price2'], 
-                name=name2, 
-                line=dict(color='#ff7f0e', width=2),
-                yaxis='y2'
-            ))
-            
-            # Layout configuratie met styling
-            fig_prices.update_layout(
-                title=dict(
-                    text="Prijsverloop",
-                    font=dict(size=16)
-                ),
-                xaxis=dict(
-                    title="Datum",
-                    gridcolor='lightgray',
-                    showline=True,
-                    linewidth=1,
-                    linecolor='black'
-                ),
-                yaxis=dict(
-                    title=f"{name1} Prijs (USD)",
-                    titlefont=dict(color='#1f77b4'),
-                    tickfont=dict(color='#1f77b4'),
-                    gridcolor='lightgray',
-                    showline=True,
-                    linewidth=1,
-                    linecolor='black'
-                ),
-                yaxis2=dict(
-                    title=f"{name2} Prijs (USD)",
-                    titlefont=dict(color='#ff7f0e'),
-                    tickfont=dict(color='#ff7f0e'),
-                    overlaying='y',
-                    side='right',
-                    anchor='free',
-                    position=1
-                ),
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                height=400,
-                margin=dict(l=50, r=50, b=50, t=50, pad=4),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
+            # PRIJSGRAFIEK - ROBUUSTE WERKENDE VERSIE
+            try:
+                fig_prices = go.Figure()
+                
+                # Coin 1 - Primaire y-as
+                fig_prices.add_trace(go.Scatter(
+                    x=df.index,
+                    y=df['price1'],
+                    name=name1,
+                    line=dict(color='blue')
+                ))
+                
+                # Coin 2 - Secundaire y-as
+                fig_prices.add_trace(go.Scatter(
+                    x=df.index,
+                    y=df['price2'],
+                    name=name2,
+                    line=dict(color='red'),
+                    yaxis='y2'
+                ))
+                
+                # Basis layout configuratie
+                fig_prices.update_layout(
+                    title_text="Prijsverloop",
+                    xaxis_title="Datum",
+                    yaxis_title=f"{name1} Prijs (USD)",
+                    yaxis=dict(
+                        titlefont=dict(color='blue'),
+                        tickfont=dict(color='blue')
+                    ),
+                    yaxis2=dict(
+                        title=f"{name2} Prijs (USD)",
+                        overlaying='y',
+                        side='right',
+                        titlefont=dict(color='red'),
+                        tickfont=dict(color='red')
+                    )
                 )
-            )
+                
+                st.plotly_chart(fig_prices, use_container_width=True)
             
-            st.plotly_chart(fig_prices, use_container_width=True)
-        
-        with col2:
-            # Ratiografiek met groen gebied
-            fig_ratio = go.Figure()
-            
-            fig_ratio.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['ratio'], 
-                name=f"{name1}/{name2} Ratio",
-                line=dict(color='#9467bd'),
-                fill='tozeroy',
-                fillcolor='rgba(148, 103, 189, 0.2)'
-            ))
-            
-            fig_ratio.update_layout(
-                title=f"{name1}/{name2} Prijs Ratio",
-                xaxis_title="Datum",
-                yaxis_title="Ratio",
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=400
-            )
-            st.plotly_chart(fig_ratio, use_container_width=True)
+            except Exception as e:
+                st.error(f"Fout bij het maken van de prijsgrafiek: {str(e)}")
+                st.write("Probeer een nieuwere versie van Plotly te installeren:")
+                st.code("pip install --upgrade plotly")
+                    
+                    with col2:
+                        # Ratiografiek met groen gebied
+                        fig_ratio = go.Figure()
+                        
+                        fig_ratio.add_trace(go.Scatter(
+                            x=df.index, 
+                            y=df['ratio'], 
+                            name=f"{name1}/{name2} Ratio",
+                            line=dict(color='#9467bd'),
+                            fill='tozeroy',
+                            fillcolor='rgba(148, 103, 189, 0.2)'
+                        ))
+                        
+                        fig_ratio.update_layout(
+                            title=f"{name1}/{name2} Prijs Ratio",
+                            xaxis_title="Datum",
+                            yaxis_title="Ratio",
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            height=400
+                        )
+                        st.plotly_chart(fig_ratio, use_container_width=True)
             
             # Z-score grafiek met entry/exit thresholds
             fig_zscore = go.Figure()
