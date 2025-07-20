@@ -139,16 +139,22 @@ class PairTradingCalculator:
 @st.cache_data
 def load_data(ticker, period, interval):
     try:
-        # CORRECTIE: ticker is al de string, geen extra aanroep nodig
-        df = yf.download(ticker, period=period, interval=interval)
-        return df['Close'].rename('price') if not df.empty else pd.Series()
+        # Download data van Yahoo Finance
+        data = yf.download(
+            tickers=ticker,  # ticker is al een string zoals "BTC-USD"
+            period=period,
+            interval=interval,
+            progress=False
+        )
+        # Return de Close prices als Series
+        return data['Close'].rename('price')
     except Exception as e:
-        st.error(f"Error loading {ticker}: {str(e)}")
-        return pd.Series()
+        st.error(f"Error loading {ticker}: {e}")
+        return pd.Series()  # Return een lege Series bij error
 
-# Data laden en verwerken
-data1 = load_data(name1, periode, interval)
-data2 = load_data(name2, periode, interval)
+# Gebruik:
+data1 = load_data("BTC-USD", "1mo", "1d") 
+data2 = load_data("ETH-USD", "1mo", "1d")
 
 if data1.empty or data2.empty:
     st.error("Failed to load data for one or both assets")
