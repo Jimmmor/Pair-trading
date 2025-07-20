@@ -77,7 +77,7 @@ class PairTradingCalculator:
         entry_price2 = row['price2']
         
         # Exit prijzen gebaseerd op z-score
-        exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10
+        exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10)
         exit_price2 = entry_price2 * (1 + (row['zscore'] - zscore_exit_threshold)/10)
         
         # Stoploss (2x de entry threshold)
