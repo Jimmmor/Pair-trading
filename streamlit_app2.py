@@ -115,7 +115,7 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-            # PRIJSGRAFIEK - GARANTIED WERKENDE VERSIE
+          # PRIJSGRAFIEK - GECORRIGEERDE VERSIE
             try:
                 # Creëer basis figuur
                 fig_prices = go.Figure()
@@ -141,9 +141,9 @@ with st.expander("📊 Statistische Analyse", expanded=True):
                     )
                 )
                 
-                # Eenvoudige layout configuratie
+                # Correcte layout configuratie
                 layout_config = {
-                    'title': 'Prijsverloop',
+                    'title': {'text': 'Prijsverloop'},
                     'xaxis': {'title': 'Datum'},
                     'yaxis': {
                         'title': f'{name1} Prijs (USD)',
@@ -155,43 +155,23 @@ with st.expander("📊 Statistische Analyse", expanded=True):
                         'titlefont': {'color': '#ff7f0e'},
                         'tickfont': {'color': '#ff7f0e'},
                         'overlaying': 'y',
-                        'side': 'right'
+                        'side': 'right',
+                        'anchor': 'x'
                     },
                     'plot_bgcolor': 'rgba(0,0,0,0)',
                     'paper_bgcolor': 'rgba(0,0,0,0)',
                     'height': 400
                 }
                 
-                # Pas layout toe met expliciete dict
-                fig_prices.update_layout(layout_config)
+                # Pas layout toe
+                fig_prices.update_layout(**layout_config)
                 
                 st.plotly_chart(fig_prices, use_container_width=True)
                 
             except Exception as e:
                 st.error(f"Fout bij het maken van prijsgrafiek: {str(e)}")
-                st.write("Probeer een andere dataset of neem contact op met support.")
-            
-            # Spread grafiek met groen gebied
-            fig_spread = go.Figure()
-            
-            fig_spread.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['spread'], 
-                name='Spread',
-                line=dict(color='#2ca02c'),
-                fill='tozeroy',
-                fillcolor='rgba(44, 160, 44, 0.2)'
-            ))
-            
-            fig_spread.update_layout(
-                title="Spread tussen de coins",
-                xaxis_title="Datum",
-                yaxis_title="Spread",
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=400
-            )
-            st.plotly_chart(fig_spread, use_container_width=True)
+                st.write("Technische details voor support:")
+                st.code(f"Plotly versie: {plotly.__version__}\nError type: {type(e).__name__}")
         
         with col2:
             # Ratiografiek met groen gebied
