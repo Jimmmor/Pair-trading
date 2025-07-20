@@ -115,45 +115,58 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
+            # Prijsgrafiek met 2 y-assen - NIEUWE VERSIE
             fig_prices = go.Figure()
             
-            # Coin 1 (links)
-            fig_prices.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['price1'], 
-                name=name1, 
-                line=dict(color='#1f77b4')
-            ))
+            # Voeg eerste trace toe (primair y-axis)
+            fig_prices.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df['price1'],
+                    name=name1,
+                    line=dict(color='#1f77b4')
+                )
+            )
             
-            # Coin 2 (rechts)
-            fig_prices.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['price2'], 
-                name=name2, 
-                line=dict(color='#ff7f0e'),
-                yaxis='y2'
-            ))
+            # Voeg tweede trace toe (secundair y-axis)
+            fig_prices.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df['price2'],
+                    name=name2,
+                    line=dict(color='#ff7f0e'),
+                    yaxis='y2'
+                )
+            )
             
+            # Basis layout configuratie
             fig_prices.update_layout(
                 title="Prijsverloop",
                 xaxis_title="Datum",
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
-                height=400,
-                yaxis=dict(
-                    title=f"{name1} Prijs (USD)",
-                    titlefont=dict(color="#1f77b4"),
-                    tickfont=dict(color="#1f77b4")
-                ),
-                yaxis2=dict(
-                    title=f"{name2} Prijs (USD)",
-                    titlefont=dict(color="#ff7f0e"),
-                    tickfont=dict(color="#ff7f0e"),
-                    overlaying="y",
-                    side="right"
-                )
+                height=400
             )
+            
+            # Eerste y-axis configuratie
+            fig_prices.update_yaxes(
+                title_text=f"{name1} Prijs (USD)",
+                title_font=dict(color="#1f77b4"),
+                tickfont=dict(color="#1f77b4")
+            )
+            
+            # Tweede y-axis configuratie
+            fig_prices.update_yaxes(
+                title_text=f"{name2} Prijs (USD)",
+                title_font=dict(color="#ff7f0e"),
+                tickfont=dict(color="#ff7f0e"),
+                overlaying="y",
+                side="right",
+                secondary_y=True
+            )
+            
             st.plotly_chart(fig_prices, use_container_width=True)
+           
             
             # Spread grafiek met groen gebied
             fig_spread = go.Figure()
