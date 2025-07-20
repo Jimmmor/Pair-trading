@@ -166,79 +166,114 @@ with st.expander("📊 Statistische Analyse", expanded=True):
             st.plotly_chart(fig_ratio, use_container_width=True)
             
             # Z-score grafiek
-            # Z-score grafiek met trading signals
+            # Z-score grafiek met verduidelijkte trading signals
             fig_zscore = go.Figure()
             
-            # Z-score lijn
+            # Z-score lijn zelf (dikke grijze lijn)
             fig_zscore.add_trace(go.Scatter(
                 x=df.index,
                 y=df['zscore'],
                 name='Z-score',
-                line=dict(color='#2ca02c', width=2)
+                line=dict(color='#888888', width=3)  # Grijze hoofdline
             ))
             
-            # Long entry (onder -entry threshold)
+            # LONG ENTRY (volle groene lijn)
             fig_zscore.add_hline(
                 y=-zscore_entry_threshold,
-                line=dict(color='green', dash='dash', width=1),
+                line=dict(color='#2ECC71', width=2),
                 annotation_text="LONG ENTRY (koop spread)",
+                annotation_font=dict(color="white", size=12),
                 annotation_position="bottom right"
             )
             
-            # Long exit (boven -exit threshold)
+            # LONG EXIT (gestippelde groene lijn)
             fig_zscore.add_hline(
                 y=-zscore_exit_threshold,
-                line=dict(color='blue', dash='dot', width=1),
+                line=dict(color='#2ECC71', width=2, dash='dot'),
                 annotation_text="LONG EXIT",
+                annotation_font=dict(color="white", size=12),
                 annotation_position="bottom right"
             )
             
-            # Short entry (boven entry threshold)
+            # SHORT ENTRY (volle rode lijn)
             fig_zscore.add_hline(
                 y=zscore_entry_threshold,
-                line=dict(color='red', dash='dash', width=1),
+                line=dict(color='#E74C3C', width=2),
                 annotation_text="SHORT ENTRY (verkoop spread)",
+                annotation_font=dict(color="white", size=12),
                 annotation_position="top right"
             )
             
-            # Short exit (onder exit threshold)
+            # SHORT EXIT (gestippelde rode lijn)
             fig_zscore.add_hline(
                 y=zscore_exit_threshold,
-                line=dict(color='purple', dash='dot', width=1),
+                line=dict(color='#E74C3C', width=2, dash='dot'),
                 annotation_text="SHORT EXIT",
+                annotation_font=dict(color="white", size=12),
                 annotation_position="top right"
             )
             
-            # Nul lijn
+            # Nul lijn (dunne witte lijn)
             fig_zscore.add_hline(
                 y=0,
-                line=dict(color='black', width=1)
+                line=dict(color='white', width=1)
             )
             
+            # Legenda toevoegen via dummy traces
+            fig_zscore.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='lines',
+                line=dict(color='#2ECC71', width=2),
+                name='Long signals'
+            ))
+            fig_zscore.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='lines',
+                line=dict(color='#2ECC71', width=2, dash='dot'),
+                name='Long exit'
+            ))
+            fig_zscore.add_trace(go.Scatter(
+                x=[None], y=[Null],
+                mode='lines',
+                line=dict(color='#E74C3C', width=2),
+                name='Short signals'
+            ))
+            fig_zscore.add_trace(go.Scatter(
+                x=[None], y=[Null],
+                mode='lines',
+                line=dict(color='#E74C3C', width=2, dash='dot'),
+                name='Short exit'
+            ))
+            
             fig_zscore.update_layout(
-                title="Z-score met Trading Signals",
+                title="<b>Z-score Trading Signals</b>",
                 xaxis_title="Datum",
                 yaxis_title="Z-score waarde",
-                height=400,
-                showlegend=True,
+                height=500,
+                plot_bgcolor='#2C3E50',  # Donkere achtergrond
+                paper_bgcolor='#2C3E50',
+                font=dict(color='white'),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
                 annotations=[
                     dict(
-                        x=0.5,
-                        y=-zscore_entry_threshold-0.5,
-                        xref="paper",
-                        yref="y",
-                        text="LONG zone",
+                        x=0.02, y=-zscore_entry_threshold,
+                        xref="paper", yref="y",
+                        text="<b>LONG ZONE</b>",
                         showarrow=False,
-                        font=dict(color="green")
+                        font=dict(color="#2ECC71", size=14)
                     ),
                     dict(
-                        x=0.5,
-                        y=zscore_entry_threshold+0.5,
-                        xref="paper",
-                        yref="y",
-                        text="SHORT zone",
+                        x=0.02, y=zscore_entry_threshold,
+                        xref="paper", yref="y",
+                        text="<b>SHORT ZONE</b>",
                         showarrow=False,
-                        font=dict(color="red")
+                        font=dict(color="#E74C3C", size=14)
                     )
                 ]
             )
