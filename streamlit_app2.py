@@ -115,59 +115,70 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-          # ALTERNATIEVE BENADERING MET EXPLICIETE KLASSEN
-            try:
-                fig_prices = go.Figure()
-                
-                # Voeg traces toe
-                fig_prices.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['price1'],
-                    name=name1,
-                    line=dict(color='#1f77b4')
-                ))
-                
-                fig_prices.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['price2'],
-                    name=name2,
-                    line=dict(color='#ff7f0e'),
-                    yaxis='y2'
-                ))
-                
-                # Maak layout objecten
-                yaxis_config = go.layout.YAxis(
-                    title=f'{name1} Prijs (USD)',
+            fig_prices = go.Figure()
+            
+            # Coin 1 op primaire y-as (blauw)
+            fig_prices.add_trace(go.Scatter(
+                x=df.index, 
+                y=df['price1'], 
+                name=name1, 
+                line=dict(color='#1f77b4', width=2)
+            ))
+            
+            # Coin 2 op secundaire y-as (rood/oranje)
+            fig_prices.add_trace(go.Scatter(
+                x=df.index, 
+                y=df['price2'], 
+                name=name2, 
+                line=dict(color='#ff7f0e', width=2),
+                yaxis='y2'
+            ))
+            
+            # Layout configuratie met styling
+            fig_prices.update_layout(
+                title=dict(
+                    text="Prijsverloop",
+                    font=dict(size=16)
+                ),
+                xaxis=dict(
+                    title="Datum",
+                    gridcolor='lightgray',
+                    showline=True,
+                    linewidth=1,
+                    linecolor='black'
+                ),
+                yaxis=dict(
+                    title=f"{name1} Prijs (USD)",
                     titlefont=dict(color='#1f77b4'),
-                    tickfont=dict(color='#1f77b4')
-                )
-                
-                yaxis2_config = go.layout.YAxis(
-                    title=f'{name2} Prijs (USD)',
+                    tickfont=dict(color='#1f77b4'),
+                    gridcolor='lightgray',
+                    showline=True,
+                    linewidth=1,
+                    linecolor='black'
+                ),
+                yaxis2=dict(
+                    title=f"{name2} Prijs (USD)",
                     titlefont=dict(color='#ff7f0e'),
                     tickfont=dict(color='#ff7f0e'),
                     overlaying='y',
                     side='right',
-                    anchor='x'
+                    anchor='free',
+                    position=1
+                ),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                height=400,
+                margin=dict(l=50, r=50, b=50, t=50, pad=4),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
                 )
-                
-                # Update layout
-                fig_prices.update_layout(
-                    title=go.layout.Title(text='Prijsverloop'),
-                    xaxis=go.layout.XAxis(title='Datum'),
-                    yaxis=yaxis_config,
-                    yaxis2=yaxis2_config,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    height=400
-                )
-                
-                st.plotly_chart(fig_prices, use_container_width=True)
-                
-            except Exception as e:
-                st.error(f"Technische fout: {str(e)}")
-                st.write("Probeer een nieuwere versie van Plotly (>= 5.0.0)")
-                st.code("pip install --upgrade plotly")
+            )
+            
+            st.plotly_chart(fig_prices, use_container_width=True)
         
         with col2:
             # Ratiografiek met groen gebied
