@@ -705,8 +705,7 @@ if st.button("Exporteer analyse naar CSV"):
     label="📊 Download Trading Data",
     data=csv_data,
     file_name=f"pair_trading_{symbol1}_{symbol2}.csv",
-    mime="text/csv"
-) 
+    mime="text/csv") 
 # Trade history export
 if len(trades) > 0:
     if st.button("Exporteer trade history naar CSV"):
