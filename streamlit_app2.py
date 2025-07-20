@@ -714,4 +714,4 @@ if len(trades) > 0:
             label="Download Trade History CSV",
             data=trades_csv,
             file_name=f"trade_history_{name1}_{name2}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime='text/csv'
+            mime='text/csv')
