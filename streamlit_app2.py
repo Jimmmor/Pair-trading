@@ -83,123 +83,6 @@ def preprocess_data(data1, data2):
     
     return df
 
-# === ORIGINELE ANALYSE SECTIE ===
-st.header("📊 Huidige Analyse")
-
-# Bereken spread en z-score voor huidige analyse
-X = df['price1'].values.reshape(-1, 1)
-y = df['price2'].values
-
-model = LinearRegression()
-model.fit(X, y)
-
-alpha = model.intercept_
-beta = model.coef_[0]
-r_squared = model.score(X, y)
-
-# Spread berekenen
-df['spread'] = df['price2'] - (alpha + beta * df['price1'])
-spread_mean = df['spread'].mean()
-spread_std = df['spread'].std()
-df['zscore'] = (df['spread'] - spread_mean) / spread_std
-
-# Rolling correlatie
-df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
-pearson_corr = df['price1'].corr(df['price2'])
-
-# Trade signalen
-df['long_entry'] = df['zscore'] < -zscore_entry_threshold
-df['short_entry'] = df['zscore'] > zscore_entry_threshold
-df['exit'] = df['zscore'].abs() < zscore_exit_threshold
-
-# Huidige positie
-if df['long_entry'].iloc[-1]:
-    current_position = f"Long Spread (koop {name2}, verkoop {name1})"
-elif df['short_entry'].iloc[-1]:
-    current_position = f"Short Spread (verkoop {name2}, koop {name1})"
-elif df['exit'].iloc[-1]:
-    current_position = "Exit positie (geen trade)"
-else:
-    current_position = "Geen duidelijk signaal"
-
-# Huidige signaal
-st.subheader("🚦 Huidige Trade Signaal")
-st.write(f"**Z-score laatste waarde:** {df['zscore'].iloc[-1]:.2f}")
-st.write(f"**Signaal:** {current_position}")
-
-# Spread grafiek met entry/exit levels
-entry_long_level = -zscore_entry_threshold * spread_std + spread_mean
-entry_short_level = zscore_entry_threshold * spread_std + spread_mean
-exit_level_pos = zscore_exit_threshold * spread_std + spread_mean
-exit_level_neg = -zscore_exit_threshold * spread_std + spread_mean
-
-fig_signal = go.Figure()
-fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
-
-fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), 
-                    annotation_text='Long Entry', annotation_position='bottom left')
-fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), 
-                    annotation_text='Short Entry', annotation_position='top left')
-fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), 
-                    annotation_text='Exit', annotation_position='top right')
-fig_signal.add_hline(y=exit_level_neg, line=dict(color='blue', dash='dot'), 
-                    annotation_text='Exit', annotation_position='bottom right')
-
-fig_signal.update_layout(title="Spread met Entry en Exit Niveaus", yaxis_title="Spread", xaxis_title="Datum")
-st.plotly_chart(fig_signal, use_container_width=True)
-
-# Prijs en Z-score grafieken
-col1, col2 = st.columns(2)
-
-with col1:
-    fig_prices = go.Figure()
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
-    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
-    
-    fig_prices.update_layout(
-        title="Prijsverloop",
-        xaxis_title="Datum",
-        yaxis_title=f"{name1} Prijs (USD)",
-        yaxis2=dict(title=f"{name2} Prijs (USD)", overlaying='y', side='right')
-    )
-    st.plotly_chart(fig_prices, use_container_width=True)
-
-with col2:
-    fig_zscore = go.Figure()
-    fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-score', line=dict(color='purple')))
-    fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'), annotation_text='Entry Threshold')
-    fig_zscore.add_hline(y=-zscore_entry_threshold, line=dict(color='green', dash='dash'), annotation_text='Entry Threshold')
-    fig_zscore.add_hline(y=zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
-    fig_zscore.add_hline(y=-zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
-    fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
-    st.plotly_chart(fig_zscore, use_container_width=True)
-
-# Correlatie statistieken
-st.subheader("📈 Correlatie Statistieken")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("Pearson Correlatie", f"{pearson_corr:.4f}")
-    st.metric("Beta (β)", f"{beta:.4f}")
-    st.metric("R-squared", f"{r_squared:.4f}")
-
-with col2:
-    current_rolling_corr = df['rolling_corr'].iloc[-1]
-    avg_rolling_corr = df['rolling_corr'].mean()
-    st.metric("Rolling Correlatie", f"{current_rolling_corr:.4f}")
-    st.metric("Gem. Rolling Correlatie", f"{avg_rolling_corr:.4f}")
-    st.metric("Alpha (α)", f"{alpha:.6f}")
-
-with col3:
-    df['returns1'] = df['price1'].pct_change()
-    df['returns2'] = df['price2'].pct_change()
-    returns_clean = df[['returns1', 'returns2']].dropna()
-    returns_corr = returns_clean['returns1'].corr(returns_clean['returns2'])
-    volatility_ratio = returns_clean['returns2'].std() / returns_clean['returns1'].std()
-    st.metric("Returns Correlatie", f"{returns_corr:.4f}")
-    st.metric("Volatiliteit Ratio", f"{volatility_ratio:.4f}")
-    st.metric("Spread Volatiliteit", f"{spread_std:.4f}")
-
 def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
     """
     Gecorrigeerde backtesting functie die P&L berekent op basis van werkelijke prijs-bewegingen
@@ -541,6 +424,123 @@ if len(trades) > 0:
 
 else:
     st.warning("Geen trades uitgevoerd in de backtesting periode. Probeer andere parameters.")
+
+# === ORIGINELE ANALYSE SECTIE ===
+st.header("📊 Huidige Analyse")
+
+# Bereken spread en z-score voor huidige analyse
+X = df['price1'].values.reshape(-1, 1)
+y = df['price2'].values
+
+model = LinearRegression()
+model.fit(X, y)
+
+alpha = model.intercept_
+beta = model.coef_[0]
+r_squared = model.score(X, y)
+
+# Spread berekenen
+df['spread'] = df['price2'] - (alpha + beta * df['price1'])
+spread_mean = df['spread'].mean()
+spread_std = df['spread'].std()
+df['zscore'] = (df['spread'] - spread_mean) / spread_std
+
+# Rolling correlatie
+df['rolling_corr'] = df['price1'].rolling(window=corr_window).corr(df['price2'])
+pearson_corr = df['price1'].corr(df['price2'])
+
+# Trade signalen
+df['long_entry'] = df['zscore'] < -zscore_entry_threshold
+df['short_entry'] = df['zscore'] > zscore_entry_threshold
+df['exit'] = df['zscore'].abs() < zscore_exit_threshold
+
+# Huidige positie
+if df['long_entry'].iloc[-1]:
+    current_position = f"Long Spread (koop {name2}, verkoop {name1})"
+elif df['short_entry'].iloc[-1]:
+    current_position = f"Short Spread (verkoop {name2}, koop {name1})"
+elif df['exit'].iloc[-1]:
+    current_position = "Exit positie (geen trade)"
+else:
+    current_position = "Geen duidelijk signaal"
+
+# Huidige signaal
+st.subheader("🚦 Huidige Trade Signaal")
+st.write(f"**Z-score laatste waarde:** {df['zscore'].iloc[-1]:.2f}")
+st.write(f"**Signaal:** {current_position}")
+
+# Spread grafiek met entry/exit levels
+entry_long_level = -zscore_entry_threshold * spread_std + spread_mean
+entry_short_level = zscore_entry_threshold * spread_std + spread_mean
+exit_level_pos = zscore_exit_threshold * spread_std + spread_mean
+exit_level_neg = -zscore_exit_threshold * spread_std + spread_mean
+
+fig_signal = go.Figure()
+fig_signal.add_trace(go.Scatter(x=df.index, y=df['spread'], mode='lines', name='Spread'))
+
+fig_signal.add_hline(y=entry_long_level, line=dict(color='green', dash='dash'), 
+                    annotation_text='Long Entry', annotation_position='bottom left')
+fig_signal.add_hline(y=entry_short_level, line=dict(color='red', dash='dash'), 
+                    annotation_text='Short Entry', annotation_position='top left')
+fig_signal.add_hline(y=exit_level_pos, line=dict(color='blue', dash='dot'), 
+                    annotation_text='Exit', annotation_position='top right')
+fig_signal.add_hline(y=exit_level_neg, line=dict(color='blue', dash='dot'), 
+                    annotation_text='Exit', annotation_position='bottom right')
+
+fig_signal.update_layout(title="Spread met Entry en Exit Niveaus", yaxis_title="Spread", xaxis_title="Datum")
+st.plotly_chart(fig_signal, use_container_width=True)
+
+# Prijs en Z-score grafieken
+col1, col2 = st.columns(2)
+
+with col1:
+    fig_prices = go.Figure()
+    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price1'], name=name1, line=dict(color='blue')))
+    fig_prices.add_trace(go.Scatter(x=df.index, y=df['price2'], name=name2, line=dict(color='red'), yaxis='y2'))
+    
+    fig_prices.update_layout(
+        title="Prijsverloop",
+        xaxis_title="Datum",
+        yaxis_title=f"{name1} Prijs (USD)",
+        yaxis2=dict(title=f"{name2} Prijs (USD)", overlaying='y', side='right')
+    )
+    st.plotly_chart(fig_prices, use_container_width=True)
+
+with col2:
+    fig_zscore = go.Figure()
+    fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-score', line=dict(color='purple')))
+    fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'), annotation_text='Entry Threshold')
+    fig_zscore.add_hline(y=-zscore_entry_threshold, line=dict(color='green', dash='dash'), annotation_text='Entry Threshold')
+    fig_zscore.add_hline(y=zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
+    fig_zscore.add_hline(y=-zscore_exit_threshold, line=dict(color='blue', dash='dot'), annotation_text='Exit Threshold')
+    fig_zscore.update_layout(title="Z-score", yaxis_title="Z-score", xaxis_title="Datum")
+    st.plotly_chart(fig_zscore, use_container_width=True)
+
+# Correlatie statistieken
+st.subheader("📈 Correlatie Statistieken")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Pearson Correlatie", f"{pearson_corr:.4f}")
+    st.metric("Beta (β)", f"{beta:.4f}")
+    st.metric("R-squared", f"{r_squared:.4f}")
+
+with col2:
+    current_rolling_corr = df['rolling_corr'].iloc[-1]
+    avg_rolling_corr = df['rolling_corr'].mean()
+    st.metric("Rolling Correlatie", f"{current_rolling_corr:.4f}")
+    st.metric("Gem. Rolling Correlatie", f"{avg_rolling_corr:.4f}")
+    st.metric("Alpha (α)", f"{alpha:.6f}")
+
+with col3:
+    df['returns1'] = df['price1'].pct_change()
+    df['returns2'] = df['price2'].pct_change()
+    returns_clean = df[['returns1', 'returns2']].dropna()
+    returns_corr = returns_clean['returns1'].corr(returns_clean['returns2'])
+    volatility_ratio = returns_clean['returns2'].std() / returns_clean['returns1'].std()
+    st.metric("Returns Correlatie", f"{returns_corr:.4f}")
+    st.metric("Volatiliteit Ratio", f"{volatility_ratio:.4f}")
+    st.metric("Spread Volatiliteit", f"{spread_std:.4f}")
 
 # Export functionaliteit
 if st.button("Exporteer analyse naar CSV"):
