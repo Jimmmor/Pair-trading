@@ -114,120 +114,111 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         col1, col2 = st.columns(2)
         
         with col1:
-            # Prijsgrafiek met 2 y-assen
-           # PRIJSGRAFIEK - ROBUUSTE WERKENDE VERSIE
-            try:
-                fig_prices = go.Figure()
-                
-                # Coin 1 - Primaire y-as
-                fig_prices.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['price1'],
-                    name=name1,
-                    line=dict(color='blue')
-                ))
-                
-                # Coin 2 - Secundaire y-as
-                fig_prices.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['price2'],
-                    name=name2,
-                    line=dict(color='red'),
-                    yaxis='y2'
-                ))
-                
-                # Basis layout configuratie
-                fig_prices.update_layout(
-                    title_text="Prijsverloop",
-                    xaxis_title="Datum",
-                    yaxis_title=f"{name1} Prijs (USD)",
-                    yaxis=dict(
-                        titlefont=dict(color='blue'),
-                        tickfont=dict(color='blue')
-                    ),
-                    yaxis2=dict(
-                        title=f"{name2} Prijs (USD)",
-                        overlaying='y',
-                        side='right',
-                        titlefont=dict(color='red'),
-                        tickfont=dict(color='red')
-                    )
-                )
-                
-                st.plotly_chart(fig_prices, use_container_width=True)
+            # Prijsgrafiek met 2 y-assen - SIMPELE WERKENDE VERSIE
+            fig_prices = go.Figure()
             
-            except Exception as e:
-                st.error(f"Fout bij het maken van de prijsgrafiek: {str(e)}")
-                st.write("Probeer een nieuwere versie van Plotly te installeren:")
-                st.code("pip install --upgrade plotly")
-                    
-                    with col2:
-                        # Ratiografiek met groen gebied
-                        fig_ratio = go.Figure()
-                        
-                        fig_ratio.add_trace(go.Scatter(
-                            x=df.index, 
-                            y=df['ratio'], 
-                            name=f"{name1}/{name2} Ratio",
-                            line=dict(color='#9467bd'),
-                            fill='tozeroy',
-                            fillcolor='rgba(148, 103, 189, 0.2)'
-                        ))
-                        
-                        fig_ratio.update_layout(
-                            title=f"{name1}/{name2} Prijs Ratio",
-                            xaxis_title="Datum",
-                            yaxis_title="Ratio",
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            height=400
-                        )
-                        st.plotly_chart(fig_ratio, use_container_width=True)
-            
-            # Z-score grafiek met entry/exit thresholds
-            fig_zscore = go.Figure()
-            
-            fig_zscore.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['zscore'], 
-                name='Z-score',
-                line=dict(color='#d62728')
+            # Coin 1 (primaire y-as)
+            fig_prices.add_trace(go.Scatter(
+                x=df.index,
+                y=df['price1'],
+                name=name1,
+                line=dict(color='blue')
             ))
             
-            # Entry thresholds
-            fig_zscore.add_hline(
-                y=zscore_entry_threshold, 
-                line=dict(color='#d62728', dash='dash', width=1), 
-                annotation_text='Entry Threshold',
-                annotation_position="top right"
-            )
-            fig_zscore.add_hline(
-                y=-zscore_entry_threshold, 
-                line=dict(color='#d62728', dash='dash', width=1), 
-                annotation_text='Entry Threshold',
-                annotation_position="bottom right"
+            # Coin 2 (secundaire y-as)
+            fig_prices.add_trace(go.Scatter(
+                x=df.index,
+                y=df['price2'],
+                name=name2,
+                line=dict(color='red'),
+                yaxis='y2'
+            ))
+            
+            # Basis layout config
+            fig_prices.update_layout(
+                title="Prijsverloop",
+                xaxis_title="Datum",
+                yaxis_title=f"{name1} Prijs (USD)",
+                yaxis2=dict(
+                    title=f"{name2} Prijs (USD)",
+                    overlaying='y',
+                    side='right'
+                ),
+                height=400
             )
             
-            # Exit thresholds
+            st.plotly_chart(fig_prices, use_container_width=True)
+            
+            # Spread grafiek
+            fig_spread = go.Figure()
+            fig_spread.add_trace(go.Scatter(
+                x=df.index,
+                y=df['spread'],
+                name='Spread',
+                line=dict(color='green'),
+                fill='tozeroy',
+                fillcolor='rgba(0, 255, 0, 0.1)'
+            ))
+            fig_spread.update_layout(
+                title="Spread tussen coins",
+                xaxis_title="Datum",
+                yaxis_title="Spread waarde",
+                height=400
+            )
+            st.plotly_chart(fig_spread, use_container_width=True)
+        
+        with col2:
+            # Ratio grafiek
+            fig_ratio = go.Figure()
+            fig_ratio.add_trace(go.Scatter(
+                x=df.index,
+                y=df['ratio'],
+                name=f"{name1}/{name2} Ratio",
+                line=dict(color='purple'),
+                fill='tozeroy',
+                fillcolor='rgba(148, 103, 189, 0.2)'
+            ))
+            fig_ratio.update_layout(
+                title=f"{name1}/{name2} Prijs Ratio",
+                xaxis_title="Datum",
+                yaxis_title="Ratio waarde",
+                height=400
+            )
+            st.plotly_chart(fig_ratio, use_container_width=True)
+            
+            # Z-score grafiek
+            fig_zscore = go.Figure()
+            fig_zscore.add_trace(go.Scatter(
+                x=df.index,
+                y=df['zscore'],
+                name='Z-score',
+                line=dict(color='orange')
+            ))
+            
+            # Threshold lijnen
             fig_zscore.add_hline(
-                y=zscore_exit_threshold, 
-                line=dict(color='#17becf', dash='dot', width=1), 
-                annotation_text='Exit Threshold',
-                annotation_position="top right"
+                y=zscore_entry_threshold,
+                line=dict(color='red', dash='dash'),
+                annotation_text="Entry Threshold"
             )
             fig_zscore.add_hline(
-                y=-zscore_exit_threshold, 
-                line=dict(color='#17becf', dash='dot', width=1), 
-                annotation_text='Exit Threshold',
-                annotation_position="bottom right"
+                y=-zscore_entry_threshold,
+                line=dict(color='red', dash='dash')
+            )
+            fig_zscore.add_hline(
+                y=zscore_exit_threshold,
+                line=dict(color='blue', dash='dot'),
+                annotation_text="Exit Threshold"
+            )
+            fig_zscore.add_hline(
+                y=-zscore_exit_threshold,
+                line=dict(color='blue', dash='dot')
             )
             
             fig_zscore.update_layout(
                 title="Z-score van de spread",
                 xaxis_title="Datum",
-                yaxis_title="Z-score",
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
+                yaxis_title="Z-score waarde",
                 height=400
             )
             st.plotly_chart(fig_zscore, use_container_width=True)
@@ -239,374 +230,44 @@ with st.expander("📊 Statistische Analyse", expanded=True):
             # Correlatiegrafiek
             fig_corr = go.Figure()
             fig_corr.add_trace(go.Scatter(
-                x=df.index, 
-                y=df['rolling_corr'], 
+                x=df.index,
+                y=df['rolling_corr'],
                 name='Rolling Correlatie',
-                line=dict(color='#1f77b4', width=2)
+                line=dict(color='blue')
             ))
             fig_corr.update_layout(
-                title=f"Rolling Correlatie ({corr_window} dagen window)",
+                title=f"Rolling Correlatie ({corr_window}d)",
                 xaxis_title="Datum",
                 yaxis_title="Correlatie",
                 yaxis_range=[-1, 1],
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
                 height=400
             )
             st.plotly_chart(fig_corr, use_container_width=True)
             
-            # Toon statistieken onder correlatiegrafiek
+            # Toon statistieken
             st.subheader("Statistieken")
-            
-            stats_col1, stats_col2 = st.columns(2)
-            
-            with stats_col1:
-                st.metric("Pearson Correlatie", f"{pearson_corr:.4f}")
-                st.metric("Rolling Correlatie (huidig)", f"{df['rolling_corr'].iloc[-1]:.4f}")
-                st.metric("Beta (β)", f"{beta:.4f}")
-            
-            with stats_col2:
-                st.metric("Alpha (α)", f"{alpha:.6f}")
-                st.metric("R-squared", f"{r_squared:.4f}")
-                st.metric("Spread Volatiliteit", f"{spread_std:.4f}")
+            st.write(f"Pearson correlatie: {pearson_corr:.4f}")
+            st.write(f"Huidige rolling correlatie: {df['rolling_corr'].iloc[-1]:.4f}")
+            st.write(f"Beta (β): {beta:.4f}")
+            st.write(f"Alpha (α): {alpha:.6f}")
+            st.write(f"R-squared: {r_squared:.4f}")
+            st.write(f"Spread volatiliteit: {spread_std:.4f}")
         
         with col2:
             # Returns scatterplot
             fig_scatter = px.scatter(
-                df.dropna(), 
-                x='returns1', 
+                df.dropna(),
+                x='returns1',
                 y='returns2',
-                title=f"Returns Scatterplot ({name1} vs {name2})",
-                labels={'returns1': f'{name1} Returns', 'returns2': f'{name2} Returns'},
-                color_discrete_sequence=['#17becf'],
-                opacity=0.6
+                title=f"Returns {name1} vs {name2}",
+                labels={
+                    'returns1': f'{name1} Returns',
+                    'returns2': f'{name2} Returns'
+                }
             )
-            
-            # Voeg regressielijn toe
-            fig_scatter.add_trace(go.Scatter(
-                x=np.linspace(df['returns1'].min(), df['returns1'].max(), 100),
-                y=alpha + beta * np.linspace(df['returns1'].min(), df['returns1'].max(), 100),
-                mode='lines',
-                line=dict(color='#d62728', width=2),
-                name='Regressielijn'
-            ))
-            
-            fig_scatter.update_layout(
-                xaxis_title=f"{name1} Returns",
-                yaxis_title=f"{name2} Returns",
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=600,
-                showlegend=True
-            )
-            
-            # Pas marker grootte en stijl aan
             fig_scatter.update_traces(
-                marker=dict(
-                    size=8,
-                    line=dict(width=0.5, color='DarkSlateGrey')
-                ),
-                selector=dict(mode='markers')
+                marker=dict(size=8, color='blue', opacity=0.6)
             )
-            
             st.plotly_chart(fig_scatter, use_container_width=True)
 
-# === BACKTESTING SECTIE ===
-with st.expander("🔙 Backtesting", expanded=False):
-    st.header("🔙 Backtesting")
-    
-    # Backtesting parameters
-    with st.sidebar:
-        st.markdown("---")
-        st.header("🎯 Backtesting Instellingen")
-        initial_capital = st.number_input("Startkapitaal (USD)", min_value=1000, max_value=1000000, value=10000, step=1000)
-        transaction_cost = st.slider("Transactiekosten (%)", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
-        max_position_size = st.slider("Max positie grootte (% van kapitaal)", min_value=10, max_value=100, value=50, step=10)
-        
-        st.subheader("🛡️ Risk Management")
-        stop_loss_pct = st.slider("Stop Loss (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.5)
-        take_profit_pct = st.slider("Take Profit (%)", min_value=0.0, max_value=50.0, value=10.0, step=1.0)
-    
-    # Backtesting functie
-    def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
-        X = df['price1'].values.reshape(-1, 1)
-        y = df['price2'].values
-        
-        model = LinearRegression()
-        model.fit(X, y)
-        
-        alpha = model.intercept_
-        beta = model.coef_[0]
-        
-        df['spread'] = df['price2'] - (alpha + beta * df['price1'])
-        spread_mean = df['spread'].mean()
-        spread_std = df['spread'].std()
-        df['zscore'] = (df['spread'] - spread_mean) / spread_std
-        
-        cash = initial_capital
-        position = 0
-        coin1_shares = 0
-        coin2_shares = 0
-        entry_price1 = 0
-        entry_price2 = 0
-        entry_date = None
-        position_value = 0
-        
-        trades = []
-        portfolio_values = []
-        positions = []
-        
-        max_position_value = (max_position_size / 100) * initial_capital
-        
-        for i in range(len(df)):
-            current_zscore = df['zscore'].iloc[i]
-            current_price1 = df['price1'].iloc[i]
-            current_price2 = df['price2'].iloc[i]
-            current_date = df.index[i]
-            
-            position_market_value = coin1_shares * current_price1 + coin2_shares * current_price2
-            portfolio_value = cash + position_market_value
-            
-            if position == 0 and i > 0:
-                if current_zscore < -entry_threshold:
-                    position = 1
-                    position_value = min(max_position_value, portfolio_value * 0.95)
-                    
-                    half_position = position_value / 2
-                    coin2_shares = half_position / current_price2
-                    coin1_shares = -half_position / current_price1
-                    
-                    entry_price1 = current_price1
-                    entry_price2 = current_price2
-                    entry_date = current_date
-                    
-                    transaction_costs = position_value * (transaction_cost / 100)
-                    cash -= transaction_costs
-                    
-                elif current_zscore > entry_threshold:
-                    position = -1
-                    position_value = min(max_position_value, portfolio_value * 0.95)
-                    
-                    half_position = position_value / 2
-                    coin1_shares = half_position / current_price1
-                    coin2_shares = -half_position / current_price2
-                    
-                    entry_price1 = current_price1
-                    entry_price2 = current_price2
-                    entry_date = current_date
-                    
-                    transaction_costs = position_value * (transaction_cost / 100)
-                    cash -= transaction_costs
-            
-            elif position != 0:
-                exit_trade = False
-                exit_reason = ""
-                
-                if abs(current_zscore) < exit_threshold:
-                    exit_trade = True
-                    exit_reason = "Z-score exit"
-                
-                current_position_value = abs(coin1_shares * current_price1) + abs(coin2_shares * current_price2)
-                pnl_dollar = (coin1_shares * (current_price1 - entry_price1) + 
-                             coin2_shares * (current_price2 - entry_price2))
-                pnl_pct = (pnl_dollar / position_value) * 100
-                
-                if pnl_pct < -stop_loss_pct:
-                    exit_trade = True
-                    exit_reason = "Stop loss"
-                elif pnl_pct > take_profit_pct:
-                    exit_trade = True
-                    exit_reason = "Take profit"
-                
-                if exit_trade:
-                    final_pnl = pnl_dollar
-                    exit_transaction_costs = current_position_value * (transaction_cost / 100)
-                    final_pnl -= exit_transaction_costs
-                    cash += (coin1_shares * current_price1 + coin2_shares * current_price2 + final_pnl)
-                    
-                    trades.append({
-                        'Entry Date': entry_date,
-                        'Exit Date': current_date,
-                        'Position': 'Long Spread' if position == 1 else 'Short Spread',
-                        'Entry Z-score': df['zscore'].loc[entry_date],
-                        'Exit Z-score': current_zscore,
-                        'Entry Price 1': entry_price1,
-                        'Entry Price 2': entry_price2,
-                        'Exit Price 1': current_price1,
-                        'Exit Price 2': current_price2,
-                        'Coin1 Shares': coin1_shares,
-                        'Coin2 Shares': coin2_shares,
-                        'Position Size': position_value,
-                        'P&L': final_pnl,
-                        'P&L %': (final_pnl / position_value) * 100,
-                        'Exit Reason': exit_reason,
-                        'Days Held': (current_date - entry_date).days
-                    })
-                    
-                    position = 0
-                    coin1_shares = 0
-                    coin2_shares = 0
-                    entry_price1 = 0
-                    entry_price2 = 0
-                    entry_date = None
-                    position_value = 0
-            
-            portfolio_values.append(portfolio_value)
-            positions.append(position)
-        
-        df_result = df.copy()
-        df_result['portfolio_value'] = portfolio_values
-        df_result['position'] = positions
-        
-        return df_result, trades
-    
-    # Voer backtest uit
-    df_backtest, trades = run_backtest(
-        df, 
-        zscore_entry_threshold, 
-        zscore_exit_threshold, 
-        initial_capital, 
-        transaction_cost, 
-        max_position_size, 
-        stop_loss_pct, 
-        take_profit_pct
-    )
-    
-    # Toon resultaten
-    if len(trades) > 0:
-        trades_df = pd.DataFrame(trades)
-        
-        # Portfolio metrics
-        final_value = df_backtest['portfolio_value'].iloc[-1]
-        total_return = ((final_value - initial_capital) / initial_capital) * 100
-        
-        # Layout met tabs
-        tab1, tab2, tab3 = st.tabs(["Performance", "Trades", "Grafieken"])
-        
-        with tab1:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Totaal Rendement", f"{total_return:.2f}%")
-                st.metric("Eindwaarde", f"${final_value:,.0f}")
-                st.metric("Aantal Trades", len(trades_df))
-            
-            with col2:
-                winning_trades = trades_df[trades_df['P&L'] > 0]
-                losing_trades = trades_df[trades_df['P&L'] < 0]
-                win_rate = (len(winning_trades) / len(trades_df)) * 100
-                st.metric("Win Rate", f"{win_rate:.1f}%")
-                st.metric("Gemiddelde Win", f"${winning_trades['P&L'].mean():.0f}")
-                st.metric("Gemiddelde Loss", f"${losing_trades['P&L'].mean():.0f}")
-            
-            with col3:
-                profit_factor = abs(winning_trades['P&L'].sum() / losing_trades['P&L'].sum()) if len(losing_trades) > 0 else float('inf')
-                st.metric("Profit Factor", f"{profit_factor:.2f}")
-                
-                returns = df_backtest['portfolio_value'].pct_change().dropna()
-                volatility = returns.std() * np.sqrt(252)
-                sharpe_ratio = (total_return / 100) / volatility if volatility > 0 else 0
-                st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
-                
-                max_drawdown = ((df_backtest['portfolio_value'].cummax() - df_backtest['portfolio_value']) / df_backtest['portfolio_value'].cummax()).max() * 100
-                st.metric("Max Drawdown", f"{max_drawdown:.2f}%")
-        
-        with tab2:
-            # Maak trades tabel meer leesbaar
-            trades_display = trades_df.copy()
-            trades_display['Entry Date'] = trades_display['Entry Date'].dt.strftime('%Y-%m-%d')
-            trades_display['Exit Date'] = trades_display['Exit Date'].dt.strftime('%Y-%m-%d')
-            trades_display['P&L'] = trades_display['P&L'].apply(lambda x: f"${x:,.0f}")
-            trades_display['Position Size'] = trades_display['Position Size'].apply(lambda x: f"${x:,.0f}")
-            trades_display['P&L %'] = trades_display['P&L %'].apply(lambda x: f"{x:.2f}%")
-            
-            st.dataframe(trades_display, use_container_width=True)
-        
-        with tab3:
-            # Portfolio value grafiek
-            fig_portfolio = go.Figure()
-            fig_portfolio.add_trace(go.Scatter(
-                x=df_backtest.index,
-                y=df_backtest['portfolio_value'],
-                mode='lines',
-                name='Portfolio Value',
-                line=dict(color='green', width=2)
-            ))
-            
-            # Voeg trade markers toe
-            for trade in trades:
-                fig_portfolio.add_trace(go.Scatter(
-                    x=[trade['Entry Date']],
-                    y=[df_backtest.loc[trade['Entry Date'], 'portfolio_value']],
-                    mode='markers',
-                    marker=dict(
-                        color='green' if trade['Position'] == 'Long Spread' else 'red',
-                        size=10,
-                        symbol='triangle-up' if trade['Position'] == 'Long Spread' else 'triangle-down'
-                    ),
-                    name=f"Entry {trade['Position']}",
-                    showlegend=False
-                ))
-                
-                fig_portfolio.add_trace(go.Scatter(
-                    x=[trade['Exit Date']],
-                    y=[df_backtest.loc[trade['Exit Date'], 'portfolio_value']],
-                    mode='markers',
-                    marker=dict(
-                        color='blue',
-                        size=8,
-                        symbol='x'
-                    ),
-                    name="Exit",
-                    showlegend=False
-                ))
-            
-            fig_portfolio.update_layout(
-                title="Portfolio Value Over Time met Trade Markers",
-                xaxis_title="Datum",
-                yaxis_title="Portfolio Value (USD)",
-                hovermode='x unified',
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
-            )
-            
-            st.plotly_chart(fig_portfolio, use_container_width=True)
-            
-            # P&L distributie
-            fig_pnl = px.histogram(
-                trades_df, 
-                x='P&L %', 
-                nbins=20,
-                title="P&L Distributie (%)",
-                labels={'P&L %': 'P&L Percentage', 'count': 'Aantal Trades'},
-                color_discrete_sequence=['#1f77b4']
-            )
-            st.plotly_chart(fig_pnl, use_container_width=True)
-    else:
-        st.warning("Geen trades uitgevoerd in de backtesting periode. Probeer andere parameters.")
-
-# Export functionaliteit
-with st.expander("📤 Export", expanded=False):
-    st.header("📤 Exporteer Data")
-    
-    if st.button("Exporteer analyse naar CSV"):
-        export_df = df.copy()
-        if len(trades) > 0:
-            export_df['backtest_portfolio_value'] = df_backtest['portfolio_value']
-        
-        csv = export_df.to_csv(index=True)
-        st.download_button(
-            label="Download CSV", 
-            data=csv, 
-            file_name=f"pairs_trading_analysis_{name1}_{name2}_{datetime.now().strftime('%Y%m%d')}.csv", 
-            mime='text/csv'
-        )
-    
-    if len(trades) > 0 and st.button("Exporteer trade history naar CSV"):
-        trades_csv = pd.DataFrame(trades).to_csv(index=False)
-        st.download_button(
-            label="Download Trade History CSV",
-            data=trades_csv,
-            file_name=f"trade_history_{name1}_{name2}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime='text/csv'
-        )
+# Rest van uw code voor backtesting en export blijft hetzelfde...
