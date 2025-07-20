@@ -87,8 +87,10 @@ def preprocess_data(data1, data2):
     
     return df
 
-# Backtesting functie
 def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
+    """
+    Gecorrigeerde backtesting functie die P&L berekent op basis van werkelijke prijs-bewegingen
+    """
     # Bereken spread en z-score
     X = df['price1'].values.reshape(-1, 1)
     y = df['price2'].values
@@ -105,38 +107,76 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
     df['zscore'] = (df['spread'] - spread_mean) / spread_std
     
     # Initialiseer backtesting variabelen
-    portfolio_value = initial_capital
+    cash = initial_capital
     position = 0  # 0 = geen positie, 1 = long spread, -1 = short spread
-    position_size = 0
-    entry_price_spread = 0
+    
+    # Voor long spread: long coin2, short coin1
+    # Voor short spread: short coin2, long coin1
+    coin1_shares = 0  # Aantal shares van coin1 (kan negatief zijn voor short)
+    coin2_shares = 0  # Aantal shares van coin2 (kan negatief zijn voor short)
+    
+    entry_price1 = 0
+    entry_price2 = 0
     entry_date = None
+    position_value = 0  # Waarde van de positie bij entry
     
     # Tracking variabelen
     trades = []
-    portfolio_values = [initial_capital]
-    positions = [0]
+    portfolio_values = []
+    positions = []
     
     # Bereken maximum positie grootte
     max_position_value = (max_position_size / 100) * initial_capital
     
-    for i in range(1, len(df)):
+    for i in range(len(df)):
         current_zscore = df['zscore'].iloc[i]
-        current_spread = df['spread'].iloc[i]
+        current_price1 = df['price1'].iloc[i]
+        current_price2 = df['price2'].iloc[i]
         current_date = df.index[i]
         
+        # Bereken huidige portfolio waarde
+        position_market_value = coin1_shares * current_price1 + coin2_shares * current_price2
+        portfolio_value = cash + position_market_value
+        
         # Check voor nieuwe posities
-        if position == 0:  # Geen huidige positie
+        if position == 0 and i > 0:  # Geen huidige positie en niet eerste dag
             if current_zscore < -entry_threshold:  # Long spread signaal
+                # Long spread = verwacht dat spread stijgt
+                # Koop coin2, verkoop kort coin1
                 position = 1
-                entry_price_spread = current_spread
+                position_value = min(max_position_value, portfolio_value * 0.95)
+                
+                # Bereken share allocaties (gelijke dollar waarde)
+                half_position = position_value / 2
+                coin2_shares = half_position / current_price2  # Long coin2
+                coin1_shares = -half_position / current_price1  # Short coin1
+                
+                entry_price1 = current_price1
+                entry_price2 = current_price2
                 entry_date = current_date
-                position_size = min(max_position_value, portfolio_value * 0.95)  # 95% om kosten te dekken
+                
+                # Update cash (transactiekosten)
+                transaction_costs = position_value * (transaction_cost / 100)
+                cash -= transaction_costs
                 
             elif current_zscore > entry_threshold:  # Short spread signaal
+                # Short spread = verwacht dat spread daalt
+                # Verkoop kort coin2, koop coin1
                 position = -1
-                entry_price_spread = current_spread
+                position_value = min(max_position_value, portfolio_value * 0.95)
+                
+                # Bereken share allocaties (gelijke dollar waarde)
+                half_position = position_value / 2
+                coin1_shares = half_position / current_price1  # Long coin1
+                coin2_shares = -half_position / current_price2  # Short coin2
+                
+                entry_price1 = current_price1
+                entry_price2 = current_price2
                 entry_date = current_date
-                position_size = min(max_position_value, portfolio_value * 0.95)
+                
+                # Update cash (transactiekosten)
+                transaction_costs = position_value * (transaction_cost / 100)
+                cash -= transaction_costs
         
         # Check voor exit condities
         elif position != 0:
@@ -148,39 +188,31 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
                 exit_trade = True
                 exit_reason = "Z-score exit"
             
-            # Stop loss check
-            if position == 1:  # Long spread
-                pnl_pct = ((current_spread - entry_price_spread) / abs(entry_price_spread)) * 100
-                if pnl_pct < -stop_loss_pct:
-                    exit_trade = True
-                    exit_reason = "Stop loss"
-                elif pnl_pct > take_profit_pct:
-                    exit_trade = True
-                    exit_reason = "Take profit"
+            # P&L berekening voor risk management
+            current_position_value = abs(coin1_shares * current_price1) + abs(coin2_shares * current_price2)
+            pnl_dollar = (coin1_shares * (current_price1 - entry_price1) + 
+                         coin2_shares * (current_price2 - entry_price2))
+            pnl_pct = (pnl_dollar / position_value) * 100
             
-            elif position == -1:  # Short spread
-                pnl_pct = ((entry_price_spread - current_spread) / abs(entry_price_spread)) * 100
-                if pnl_pct < -stop_loss_pct:
-                    exit_trade = True
-                    exit_reason = "Stop loss"
-                elif pnl_pct > take_profit_pct:
-                    exit_trade = True
-                    exit_reason = "Take profit"
+            # Stop loss en take profit checks
+            if pnl_pct < -stop_loss_pct:
+                exit_trade = True
+                exit_reason = "Stop loss"
+            elif pnl_pct > take_profit_pct:
+                exit_trade = True
+                exit_reason = "Take profit"
             
             # Execute exit
             if exit_trade:
-                # Bereken P&L
-                if position == 1:  # Long spread
-                    pnl = ((current_spread - entry_price_spread) / abs(entry_price_spread)) * position_size
-                else:  # Short spread
-                    pnl = ((entry_price_spread - current_spread) / abs(entry_price_spread)) * position_size
+                # Bereken final P&L
+                final_pnl = pnl_dollar
                 
-                # Transactiekosten aftrekken
-                transaction_costs = position_size * (transaction_cost / 100) * 2  # Entry en exit
-                pnl -= transaction_costs
+                # Exit transactiekosten
+                exit_transaction_costs = current_position_value * (transaction_cost / 100)
+                final_pnl -= exit_transaction_costs
                 
-                # Update portfolio
-                portfolio_value += pnl
+                # Update cash
+                cash += (coin1_shares * current_price1 + coin2_shares * current_price2 + final_pnl)
                 
                 # Log trade
                 trades.append({
@@ -189,30 +221,38 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
                     'Position': 'Long Spread' if position == 1 else 'Short Spread',
                     'Entry Z-score': df['zscore'].loc[entry_date],
                     'Exit Z-score': current_zscore,
-                    'Entry Spread': entry_price_spread,
-                    'Exit Spread': current_spread,
-                    'Position Size': position_size,
-                    'P&L': pnl,
-                    'P&L %': (pnl / position_size) * 100,
+                    'Entry Price 1': entry_price1,
+                    'Entry Price 2': entry_price2,
+                    'Exit Price 1': current_price1,
+                    'Exit Price 2': current_price2,
+                    'Coin1 Shares': coin1_shares,
+                    'Coin2 Shares': coin2_shares,
+                    'Position Size': position_value,
+                    'P&L': final_pnl,
+                    'P&L %': (final_pnl / position_value) * 100,
                     'Exit Reason': exit_reason,
                     'Days Held': (current_date - entry_date).days
                 })
                 
                 # Reset position
                 position = 0
-                position_size = 0
-                entry_price_spread = 0
+                coin1_shares = 0
+                coin2_shares = 0
+                entry_price1 = 0
+                entry_price2 = 0
                 entry_date = None
+                position_value = 0
         
         # Track portfolio value en posities
         portfolio_values.append(portfolio_value)
         positions.append(position)
     
     # Creëer results DataFrame
-    df['portfolio_value'] = portfolio_values
-    df['position'] = positions
+    df_result = df.copy()
+    df_result['portfolio_value'] = portfolio_values
+    df_result['position'] = positions
     
-    return df, trades
+    return df_result, trades
 
 # Load data
 data1 = load_data(coin1, periode, interval)
