@@ -166,22 +166,83 @@ with st.expander("📊 Statistische Analyse", expanded=True):
             st.plotly_chart(fig_ratio, use_container_width=True)
             
             # Z-score grafiek
+            # Z-score grafiek met trading signals
             fig_zscore = go.Figure()
+            
+            # Z-score lijn
             fig_zscore.add_trace(go.Scatter(
-                x=df.index, y=df['zscore'], name='Z-score',
-                line=dict(color='orange')
+                x=df.index,
+                y=df['zscore'],
+                name='Z-score',
+                line=dict(color='#2ca02c', width=2)
             ))
-            fig_zscore.add_hline(y=zscore_entry_threshold, line=dict(color='red', dash='dash'))
-            fig_zscore.add_hline(y=-zscore_entry_threshold, line=dict(color='red', dash='dash'))
-            fig_zscore.add_hline(y=zscore_exit_threshold, line=dict(color='blue', dash='dot'))
-            fig_zscore.add_hline(y=-zscore_exit_threshold, line=dict(color='blue', dash='dot'))
+            
+            # Long entry (onder -entry threshold)
+            fig_zscore.add_hline(
+                y=-zscore_entry_threshold,
+                line=dict(color='green', dash='dash', width=1),
+                annotation_text="LONG ENTRY (koop spread)",
+                annotation_position="bottom right"
+            )
+            
+            # Long exit (boven -exit threshold)
+            fig_zscore.add_hline(
+                y=-zscore_exit_threshold,
+                line=dict(color='blue', dash='dot', width=1),
+                annotation_text="LONG EXIT",
+                annotation_position="bottom right"
+            )
+            
+            # Short entry (boven entry threshold)
+            fig_zscore.add_hline(
+                y=zscore_entry_threshold,
+                line=dict(color='red', dash='dash', width=1),
+                annotation_text="SHORT ENTRY (verkoop spread)",
+                annotation_position="top right"
+            )
+            
+            # Short exit (onder exit threshold)
+            fig_zscore.add_hline(
+                y=zscore_exit_threshold,
+                line=dict(color='purple', dash='dot', width=1),
+                annotation_text="SHORT EXIT",
+                annotation_position="top right"
+            )
+            
+            # Nul lijn
+            fig_zscore.add_hline(
+                y=0,
+                line=dict(color='black', width=1)
+            )
             
             fig_zscore.update_layout(
-                title="Z-score van de spread",
+                title="Z-score met Trading Signals",
                 xaxis_title="Datum",
-                yaxis_title="Z-score",
-                height=400
+                yaxis_title="Z-score waarde",
+                height=400,
+                showlegend=True,
+                annotations=[
+                    dict(
+                        x=0.5,
+                        y=-zscore_entry_threshold-0.5,
+                        xref="paper",
+                        yref="y",
+                        text="LONG zone",
+                        showarrow=False,
+                        font=dict(color="green")
+                    ),
+                    dict(
+                        x=0.5,
+                        y=zscore_entry_threshold+0.5,
+                        xref="paper",
+                        yref="y",
+                        text="SHORT zone",
+                        showarrow=False,
+                        font=dict(color="red")
+                    )
+                ]
             )
+            
             st.plotly_chart(fig_zscore, use_container_width=True)
     
     with tab2:
