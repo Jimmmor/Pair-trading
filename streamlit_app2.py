@@ -72,11 +72,11 @@ class PairTradingCalculator:
         
         return df
 
-     def _calculate_short_trade(self, row):
+    def _calculate_short_trade(self, row):
         entry_price1 = row['price1']
         entry_price2 = row['price2']
         
-        # Exit prijzen gebaseerd op z-score - CORRECTIE: toegevoegd sluitende haakje
+        # Exit prijzen gebaseerd op z-score
         exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10)
         exit_price2 = entry_price2 * (1 + (row['zscore'] - zscore_exit_threshold)/10)
         
@@ -90,18 +90,6 @@ class PairTradingCalculator:
         # Liquidatie prijzen
         liquidation1 = entry_price1 * (1 + 1/self.leverage) - stoploss1 * (1/self.leverage)
         liquidation2 = entry_price2 * (1 - 1/self.leverage) + stoploss2 * (1/self.leverage)
-        
-    return {
-        'entry_price1': entry_price1,
-        'entry_price2': entry_price2,
-        'exit_price1': exit_price1,
-        'exit_price2': exit_price2,
-        'stoploss1': stoploss1,
-        'stoploss2': stoploss2,
-        'liquidation1': liquidation1,
-        'liquidation2': liquidation2,
-        'position_size': position_size
-    }
         
         return {
             'entry_price1': entry_price1,
@@ -122,8 +110,8 @@ class PairTradingCalculator:
         exit_price1 = entry_price1 * (1 + (abs(row['zscore']) - zscore_exit_threshold)/10)
         exit_price2 = entry_price2 * (1 - (abs(row['zscore']) - zscore_exit_threshold)/10)
         
-        stoploss1 = entry_price1 * (1 - (abs(row['zscore'])/5)
-        stoploss2 = entry_price2 * (1 + (abs(row['zscore'])/5)
+        stoploss1 = entry_price1 * (1 - (abs(row['zscore'])/5))
+        stoploss2 = entry_price2 * (1 + (abs(row['zscore'])/5))
         
         position_size = self._calculate_position_size(entry_price1, stoploss1)
         
