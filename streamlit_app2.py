@@ -702,11 +702,11 @@ if st.button("Exporteer analyse naar CSV"):
     
     csv = export_df.to_csv(index=True)
     st.download_button(
-        label="Download CSV", 
-        data=csv, 
-        file_name=f"pairs_trading_analysis_{name1}_{name2}_{datetime.now().strftime('%Y%m%d')}.csv", 
-        mime='text/csv'
-    )
+    label="📊 Download Trading Data",
+    data=csv_data,
+    file_name=f"pair_trading_{symbol1}_{symbol2}.csv",
+    mime="text/csv"
+) 
 # Trade history export
 if len(trades) > 0:
     if st.button("Exporteer trade history naar CSV"):
