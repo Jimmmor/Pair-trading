@@ -115,7 +115,7 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-            # PRIJSGRAFIEK - ROBUUSTE WERKENDE VERSIE
+           # PRIJSGRAFIEK - ROBUUSTE WERKENDE VERSIE
             try:
                 fig_prices = go.Figure()
                 
