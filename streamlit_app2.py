@@ -115,10 +115,10 @@ with st.expander("📊 Statistische Analyse", expanded=True):
         
         with col1:
             # Prijsgrafiek met 2 y-assen
-            # Prijsgrafiek met 2 y-assen - NIEUWE VERSIE
+            # Prijsgrafiek met 2 y-assen - ALTERNATIEVE WERKENDE VERSIE
             fig_prices = go.Figure()
             
-            # Voeg eerste trace toe (primair y-axis)
+            # Coin 1 (primaire y-as)
             fig_prices.add_trace(
                 go.Scatter(
                     x=df.index,
@@ -128,42 +128,40 @@ with st.expander("📊 Statistische Analyse", expanded=True):
                 )
             )
             
-            # Voeg tweede trace toe (secundair y-axis)
+            # Coin 2 (secundaire y-as)
             fig_prices.add_trace(
                 go.Scatter(
                     x=df.index,
                     y=df['price2'],
                     name=name2,
-                    line=dict(color='#ff7f0e'),
-                    yaxis='y2'
+                    line=dict(color='#ff7f0e')
                 )
             )
             
-            # Basis layout configuratie
+            # Layout configuratie met expliciete y-as definities
             fig_prices.update_layout(
                 title="Prijsverloop",
                 xaxis_title="Datum",
+                yaxis=dict(
+                    title=f"{name1} Prijs (USD)",
+                    titlefont=dict(color="#1f77b4"),
+                    tickfont=dict(color="#1f77b4")
+                ),
+                yaxis2=dict(
+                    title=f"{name2} Prijs (USD)",
+                    titlefont=dict(color="#ff7f0e"),
+                    tickfont=dict(color="#ff7f0e"),
+                    overlaying="y",
+                    side="right",
+                    anchor="x"  # Belangrijke toevoeging
+                ),
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 height=400
             )
             
-            # Eerste y-axis configuratie
-            fig_prices.update_yaxes(
-                title_text=f"{name1} Prijs (USD)",
-                title_font=dict(color="#1f77b4"),
-                tickfont=dict(color="#1f77b4")
-            )
-            
-            # Tweede y-axis configuratie
-            fig_prices.update_yaxes(
-                title_text=f"{name2} Prijs (USD)",
-                title_font=dict(color="#ff7f0e"),
-                tickfont=dict(color="#ff7f0e"),
-                overlaying="y",
-                side="right",
-                secondary_y=True
-            )
+            # Expliciet aangeven welke trace naar welke y-as gaat
+            fig_prices.data[1].update(yaxis='y2')
             
             st.plotly_chart(fig_prices, use_container_width=True)
            
