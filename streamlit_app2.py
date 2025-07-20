@@ -233,13 +233,13 @@ with st.expander("📊 Statistische Analyse", expanded=True):
                 name='Long exit'
             ))
             fig_zscore.add_trace(go.Scatter(
-                x=[None], y=[Null],
+                x=[None], y=[None],
                 mode='lines',
                 line=dict(color='#E74C3C', width=2),
                 name='Short signals'
             ))
             fig_zscore.add_trace(go.Scatter(
-                x=[None], y=[Null],
+                x=[None], y=[None],
                 mode='lines',
                 line=dict(color='#E74C3C', width=2, dash='dot'),
                 name='Short exit'
