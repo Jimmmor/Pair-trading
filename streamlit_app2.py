@@ -16,8 +16,12 @@ st.title("📈 Advanced Pairs Trading Monitor")
 # Sidebar instellingen
 with st.sidebar:
     st.header("🔍 Pair Selection")
-    name1 = st.selectbox("Asset 1", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"], index=0)
-    name2 = st.selectbox("Asset 2", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"], index=1)
+    # Gebruik de keys uit het tickers dictionary
+    ticker_keys = list(tickers.keys())
+    name1 = st.selectbox("Asset 1", ticker_keys, index=0)
+    # Filter de tweede selectie om dubbele selectie te voorkomen
+    remaining = [k for k in ticker_keys if k != name1]
+    name2 = st.selectbox("Asset 2", remaining, index=0 if len(remaining) > 1 else 0)
     
     st.markdown("---")
     st.header("📊 Data Settings")
