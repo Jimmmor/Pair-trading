@@ -40,7 +40,7 @@ class PairTradingCalculator:
     def __init__(self, leverage=1, risk_per_trade=0.01):
         self.leverage = leverage
         self.risk_per_trade = risk_per_trade
-    
+
     def calculate_trade_params(self, df):
         """Bereken alle trading parameters voor elk punt in de dataframe"""
         df = df.copy()
@@ -56,15 +56,26 @@ class PairTradingCalculator:
         spread_std = df['spread'].std()
         df['zscore'] = (df['spread'] - spread_mean) / spread_std
         
-        # Signal detection
-        df['signal'] = np.where(
-            df['zscore'] > zscore_entry_threshold, 'SHORT',
-            np.where(
-                df['zscore'] < -zscore_entry_threshold, 'LONG', 
-                np.nan
-            )
-        )
+        # Signal detection - GECORRIGEERDE VERSIE
+        conditions = [
+            df['zscore'] > zscore_entry_threshold,
+            df['zscore'] < -zscore_entry_threshold
+        ]
+        choices = ['SHORT', 'LONG']
+        df['signal'] = np.select(conditions, choices, default=np.nan)
         
+        # Bereken trade parameters voor alle signalen
+        for idx, row in df[df['signal'].notna()].iterrows():
+            if row['signal'] == 'SHORT':
+                trade_params = self._calculate_short_trade(row)
+            else:
+                trade_params = self._calculate_long_trade(row)
+            
+            for key, val in trade_params.items():
+                df.loc[idx, key] = val
+        
+        return df
+            
         # Bereken trade parameters voor alle signalen
         for idx, row in df[df['signal'].notna()].iterrows():
             if row['signal'] == 'SHORT':
