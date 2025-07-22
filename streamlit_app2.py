@@ -379,127 +379,187 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             st.plotly_chart(fig_scatter, use_container_width=True)
 
 # === TRADING SIGNALS SECTION ===
+# Verbeterde Trade Signal Sectie - Vervang het bestaande gedeelte
 with st.expander("📋 Trading Signals", expanded=True):
-    st.header("📋 Trading Signals")
+    st.header("📋 Trading Signals - Live Recommendations")
     
-    # Original trading signals visualization
-    def plot_trading_signals(df):
-        fig = make_subplots(
-            rows=3, cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.05,
-            row_heights=[0.6, 0.2, 0.2],
-            specs=[
-                [{"secondary_y": True}],
-                [{}],
-                [{}]
-            ]
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['price1'],
-                name=f"{name1} Price",
-                line=dict(color='blue', width=2),
-                hovertemplate="%{y:.6f}"
-            ),
-            row=1, col=1,
-            secondary_y=False
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['price2'],
-                name=f"{name2} Price",
-                line=dict(color='red', width=2),
-                hovertemplate="%{y:.6f}"
-            ),
-            row=1, col=1,
-            secondary_y=True
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['price1'] - df['price2'],
-                name="Spread",
-                line=dict(color='green', width=1),
-                hovertemplate="%{y:.6f}"
-            ),
-            row=2, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['zscore'],
-                name="Z-score",
-                line=dict(color='purple', width=1.5),
-                hovertemplate="Z: %{y:.2f}"
-            ),
-            row=3, col=1
-        )
-
-        fig.add_hline(
-            y=zscore_entry_threshold,
-            line=dict(color="red", width=1, dash="dash"),
-            row=3, col=1
-        )
-        fig.add_hline(
-            y=-zscore_entry_threshold,
-            line=dict(color="green", width=1, dash="dash"),
-            row=3, col=1
-        )
-        fig.add_hline(
-            y=zscore_exit_threshold,
-            line=dict(color="pink", width=1, dash="dot"),
-            row=3, col=1
-        )
-        fig.add_hline(
-            y=-zscore_exit_threshold,
-            line=dict(color="lightgreen", width=1, dash="dot"),
-            row=3, col=1
-        )
-
-        fig.update_layout(
-            title=f"Pairs Trading: {name1} vs {name2}",
-            height=800,
-            hovermode="x unified",
-            showlegend=True,
-            legend=dict(orientation="h", y=1.1)
-        )
-        
-        fig.update_yaxes(title_text=f"{name1} Price", row=1, col=1, secondary_y=False)
-        fig.update_yaxes(title_text=f"{name2} Price", row=1, col=1, secondary_y=True)
-        fig.update_yaxes(title_text="Spread", row=2, col=1)
-        fig.update_yaxes(title_text="Z-score", row=3, col=1)
-        
-        return fig
-
-    st.plotly_chart(plot_trading_signals(df), use_container_width=True)
+    # Huidig signaal weergeven
+    current_signal = df.iloc[-1]['signal'] if 'signal' in df.columns else None
+    current_zscore = df.iloc[-1]['zscore'] if 'zscore' in df.columns else 0
     
-    # Trading signals table
-    signals_df = df[df['signal'].notna()][[
-        'signal', 'price1', 'price2', 'zscore',
-        'entry_price1', 'entry_price2',
-        'exit_price1', 'exit_price2',
-        'stoploss1', 'stoploss2',
-        'liquidation1', 'liquidation2',
-        'position_size'
-    ]]
-    
-    # Format only numeric columns
-    numeric_cols = signals_df.select_dtypes(include=[np.number]).columns
-    if not signals_df.empty:
-        st.dataframe(
-            signals_df.style.format(
-                {col: "{:.6f}" for col in numeric_cols}
-            )
-        )
+    if current_signal == 'LONG':
+        st.success(f"**Current Signal (LONG SPREAD):** Buy {name1} / Short {name2} | Z-score: {current_zscore:.2f}")
+        st.markdown(f"""
+        - **Entry:** When Z-score < -{zscore_entry_threshold:.1f} (current: {current_zscore:.2f})
+        - **Exit:** When Z-score > -{zscore_exit_threshold:.1f}
+        - **Strategy:** Betting on mean reversion - the spread is unusually wide
+        """)
+    elif current_signal == 'SHORT':
+        st.error(f"**Current Signal (SHORT SPREAD):** Short {name1} / Buy {name2} | Z-score: {current_zscore:.2f}")
+        st.markdown(f"""
+        - **Entry:** When Z-score > {zscore_entry_threshold:.1f} (current: {current_zscore:.2f})
+        - **Exit:** When Z-score < {zscore_exit_threshold:.1f}
+        - **Strategy:** Betting on mean reversion - the spread is unusually narrow
+        """)
     else:
-        st.write("No trading signals found")
+        st.info(f"**No Current Trade Signal** | Z-score: {current_zscore:.2f}")
+        st.markdown(f"""
+        - **Wait** for Z-score to exceed ±{zscore_entry_threshold:.1f} (current: {current_zscore:.2f})
+        - **Trading Range:** Between -{zscore_exit_threshold:.1f} and {zscore_exit_threshold:.1f}
+        """)
+    
+    st.markdown("---")
+    st.subheader("Trade Execution Parameters")
+    
+    # Toon de laatste 5 trades voor context
+    if 'signal' in df.columns:
+        last_signals = df[df['signal'].notna()].tail(5)
+        if not last_signals.empty:
+            st.write("**Recent Trade Signals:**")
+            cols = st.columns(5)
+            for idx, (i, row) in enumerate(last_signals.iterrows()):
+                with cols[idx]:
+                    if row['signal'] == 'LONG':
+                        st.metric(f"LONG {i.strftime('%H:%M')}", 
+                                f"Z: {row['zscore']:.2f}",
+                                delta="Buy "+name1[:4]+"/Short "+name2[:4])
+                    else:
+                        st.metric(f"SHORT {i.strftime('%H:%M')}", 
+                                f"Z: {row['zscore']:.2f}",
+                                delta="Short "+name1[:4]+"/Buy "+name2[:4])
+    
+    # Verbeterde trade signal logica
+    def generate_trade_signals(df):
+        df = df.copy()
+        
+        # Bereken hedge ratio met rolling window
+        window_size = min(30, len(df)//2)  # Dynamische window grootte
+        df['hedge_ratio'] = np.nan
+        df['spread'] = np.nan
+        
+        for i in range(window_size, len(df)):
+            window = df.iloc[i-window_size:i]
+            X = window['price1'].values.reshape(-1, 1)
+            y = window['price2'].values
+            
+            model = LinearRegression().fit(X, y)
+            hedge_ratio = model.coef_[0]
+            spread = df.iloc[i]['price2'] - (model.intercept_ + hedge_ratio * df.iloc[i]['price1'])
+            
+            df.iloc[i, df.columns.get_loc('hedge_ratio')] = hedge_ratio
+            df.iloc[i, df.columns.get_loc('spread')] = spread
+        
+        # Bereken Z-scores op de spread
+        df['spread_mean'] = df['spread'].rolling(window=window_size).mean()
+        df['spread_std'] = df['spread'].rolling(window=window_size).std()
+        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std']
+        
+        # Genereer trade signals
+        df['signal'] = np.nan
+        df['position'] = 0
+        
+        in_position = False
+        current_signal = None
+        
+        for i in range(1, len(df)):
+            # Exit logica
+            if in_position:
+                if (current_signal == 'LONG' and df['zscore'].iloc[i] > -zscore_exit_threshold) or \
+                   (current_signal == 'SHORT' and df['zscore'].iloc[i] < zscore_exit_threshold):
+                    df.iloc[i, df.columns.get_loc('signal')] = 'EXIT'
+                    in_position = False
+                    current_signal = None
+                    df.iloc[i, df.columns.get_loc('position')] = 0
+                else:
+                    df.iloc[i, df.columns.get_loc('position')] = 1 if current_signal == 'LONG' else -1
+            
+            # Entry logica (alleen als niet al in positie)
+            if not in_position:
+                if df['zscore'].iloc[i] < -zscore_entry_threshold:
+                    df.iloc[i, df.columns.get_loc('signal')] = 'LONG'
+                    in_position = True
+                    current_signal = 'LONG'
+                    df.iloc[i, df.columns.get_loc('position')] = 1
+                elif df['zscore'].iloc[i] > zscore_entry_threshold:
+                    df.iloc[i, df.columns.get_loc('signal')] = 'SHORT'
+                    in_position = True
+                    current_signal = 'SHORT'
+                    df.iloc[i, df.columns.get_loc('position')] = -1
+        
+        return df
+    
+    df = generate_trade_signals(df)
+    
+    # Plot alleen de Z-score met trading signals
+    fig_signals = go.Figure()
+    
+    # Z-score lijn
+    fig_signals.add_trace(go.Scatter(
+        x=df.index,
+        y=df['zscore'],
+        name='Z-score',
+        line=dict(color='#636EFA', width=2),
+        hovertemplate="Z: %{y:.2f}<extra></extra>"
+    ))
+    
+    # Markeer trading periods
+    fig_signals.add_trace(go.Scatter(
+        x=df.index,
+        y=np.where(df['position'] == 1, df['zscore'], np.nan),
+        name='Long Position',
+        mode='markers',
+        marker=dict(color='green', size=8),
+        hovertemplate="LONG SPREAD<extra></extra>"
+    ))
+    
+    fig_signals.add_trace(go.Scatter(
+        x=df.index,
+        y=np.where(df['position'] == -1, df['zscore'], np.nan),
+        name='Short Position',
+        mode='markers',
+        marker=dict(color='red', size=8),
+        hovertemplate="SHORT SPREAD<extra></extra>"
+    ))
+    
+    # Entry/exit levels
+    fig_signals.add_hline(
+        y=zscore_entry_threshold,
+        line=dict(color="red", dash="dash", width=1),
+        annotation_text=f"Short Entry ({zscore_entry_threshold})",
+        annotation_position="top right"
+    )
+    
+    fig_signals.add_hline(
+        y=-zscore_entry_threshold,
+        line=dict(color="green", dash="dash", width=1),
+        annotation_text=f"Long Entry (-{zscore_entry_threshold})",
+        annotation_position="bottom right"
+    )
+    
+    fig_signals.add_hline(
+        y=zscore_exit_threshold,
+        line=dict(color="lightcoral", dash="dot", width=1),
+        annotation_text=f"Short Exit ({zscore_exit_threshold})",
+        annotation_position="top right"
+    )
+    
+    fig_signals.add_hline(
+        y=-zscore_exit_threshold,
+        line=dict(color="lightgreen", dash="dot", width=1),
+        annotation_text=f"Long Exit (-{zscore_exit_threshold})",
+        annotation_position="bottom right"
+    )
+    
+    fig_signals.update_layout(
+        title="Trading Signals - Z-score with Entry/Exit Levels",
+        xaxis_title="Date",
+        yaxis_title="Z-score",
+        height=400,
+        hovermode="x unified",
+        showlegend=True
+    )
+    
+    st.plotly_chart(fig_signals, use_container_width=True)
 
 # === BACKTESTING SECTION ===
 def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
