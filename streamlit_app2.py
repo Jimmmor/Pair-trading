@@ -14,16 +14,11 @@ st.set_page_config(layout="wide")
 st.title("📈 Advanced Pairs Trading Monitor")
 
 # Sidebar instellingen
-# Sidebar instellingen - GECORRIGEERDE VERSIE
 with st.sidebar:
     st.header("🔍 Pair Selection")
-    # Haal alle ticker keys op uit het geïmporteerde tickers dict
     all_tickers = list(tickers.keys())
     
-    # Eerste asset selectie
     name1 = st.selectbox("Asset 1", all_tickers, index=0)
-    
-    # Tweede asset selectie (filter de geselecteerde eerste asset eruit)
     remaining_tickers = [t for t in all_tickers if t != name1]
     name2 = st.selectbox("Asset 2", remaining_tickers, index=0 if len(remaining_tickers) > 0 else 0)
     
@@ -46,26 +41,21 @@ class PairTradingCalculator:
         self.risk_per_trade = risk_per_trade
 
     def calculate_trade_params(self, df):
-        """Bereken alle trading parameters voor elk punt in de dataframe"""
         df = df.copy()
         
-        # Spread berekening
         X = df['price1'].values.reshape(-1, 1)
         y = df['price2'].values
         model = LinearRegression().fit(X, y)
         df['spread'] = df['price2'] - (model.intercept_ + model.coef_[0] * df['price1'])
         
-        # Z-score berekening
         spread_mean = df['spread'].mean()
         spread_std = df['spread'].std()
         df['zscore'] = (df['spread'] - spread_mean) / spread_std
         
-        # Signal detection - SIMPELE WERKENDE VERSIE
-        df['signal'] = np.nan  # Initialize with NaN
+        df['signal'] = np.nan
         df.loc[df['zscore'] > zscore_entry_threshold, 'signal'] = 'SHORT'
         df.loc[df['zscore'] < -zscore_entry_threshold, 'signal'] = 'LONG'
         
-        # Bereken trade parameters voor alle signalen
         for idx, row in df[df['signal'].notna()].iterrows():
             if row['signal'] == 'SHORT':
                 trade_params = self._calculate_short_trade(row)
@@ -76,22 +66,19 @@ class PairTradingCalculator:
                 df.loc[idx, key] = val
         
         return df     
+    
     def _calculate_short_trade(self, row):
         entry_price1 = row['price1']
         entry_price2 = row['price2']
         
-        # Exit prijzen gebaseerd op z-score
         exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10)
         exit_price2 = entry_price2 * (1 + (row['zscore'] - zscore_exit_threshold)/10)
         
-        # Stoploss (2x de entry threshold)
         stoploss1 = entry_price1 * (1 + (row['zscore']/5))
         stoploss2 = entry_price2 * (1 - (row['zscore']/5))
         
-        # Position sizing
         position_size = self._calculate_position_size(entry_price1, stoploss1)
         
-        # Liquidatie prijzen
         liquidation1 = entry_price1 * (1 + 1/self.leverage) - stoploss1 * (1/self.leverage)
         liquidation2 = entry_price2 * (1 - 1/self.leverage) + stoploss2 * (1/self.leverage)
         
@@ -135,19 +122,14 @@ class PairTradingCalculator:
         }
 
     def _calculate_position_size(self, entry_price, stoploss_price):
-        """Bereken positie grootte gebaseerd op risico per trade"""
-        risk_amount = self.risk_per_trade / 100  # Percentage omzetten naar decimaal
+        risk_amount = self.risk_per_trade / 100
         price_diff = abs(entry_price - stoploss_price)
         return risk_amount / price_diff if price_diff != 0 else 0
 
 @st.cache_data
 def load_data(ticker_key, period, interval):
-    """Laad data voor een ticker key uit het tickers dictionary"""
     try:
-        # Haal de echte ticker symbol op uit het tickers dict
         ticker_symbol = tickers[ticker_key]
-        
-        # Download de data
         data = yf.download(
             tickers=ticker_symbol,
             period=period,
@@ -155,7 +137,6 @@ def load_data(ticker_key, period, interval):
             progress=False
         )
         
-        # Behoud de originele return structuur
         if isinstance(data.columns, pd.MultiIndex):
             return data['Close'].iloc[:, 0].dropna()
         return data['Close'].dropna()
@@ -164,9 +145,7 @@ def load_data(ticker_key, period, interval):
         st.error(f"Fout bij ophalen data voor {ticker_key}: {e}")
         return pd.Series()
 
-# Originele data verwerkingsfunctie
 def preprocess_data(data1, data2):
-    """Preprocessing zoals in originele code"""
     if not isinstance(data1, pd.Series):
         data1 = pd.Series(data1)
     if not isinstance(data2, pd.Series):
@@ -181,7 +160,6 @@ def preprocess_data(data1, data2):
     
     return df
 
-# Gebruik in de app - blijft identiek aan origineel
 data1 = load_data(name1, periode, interval)
 data2 = load_data(name2, periode, interval)
 
@@ -191,26 +169,22 @@ if data1.empty or data2.empty:
 
 df = preprocess_data(data1, data2)
 
-# Bereken trading parameters
 calculator = PairTradingCalculator(leverage=leverage, risk_per_trade=risk_per_trade)
 df = calculator.calculate_trade_params(df)
 
-# Visualisatie
 def plot_trading_signals(df):
-    # Maak subplots met duidelijke specificaties
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.6, 0.2, 0.2],
         specs=[
-            [{"secondary_y": True}],  # Eerste rij heeft secundaire y-as
-            [{}],  # Tweede rij
-            [{}]   # Derde rij
+            [{"secondary_y": True}],
+            [{}],
+            [{}]
         ]
     )
     
-    # Eerste asset (prijs1) - Primaire y-as
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -220,10 +194,9 @@ def plot_trading_signals(df):
             hovertemplate="%{y:.6f}"
         ),
         row=1, col=1,
-        secondary_y=False  # Expliciet aangeven als primaire y-as
+        secondary_y=False
     )
 
-    # Tweede asset (prijs2) - Secundaire y-as
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -233,10 +206,9 @@ def plot_trading_signals(df):
             hovertemplate="%{y:.6f}"
         ),
         row=1, col=1,
-        secondary_y=True  # Expliciet aangeven als secundaire y-as
+        secondary_y=True
     )
 
-    # Spread plot
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -248,7 +220,6 @@ def plot_trading_signals(df):
         row=2, col=1
     )
 
-    # Z-score plot
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -260,7 +231,6 @@ def plot_trading_signals(df):
         row=3, col=1
     )
 
-    # Threshold lines voor Z-score
     fig.add_hline(
         y=zscore_entry_threshold,
         line=dict(color="red", width=1, dash="dash"),
@@ -282,7 +252,6 @@ def plot_trading_signals(df):
         row=3, col=1
     )
 
-    # Layout configuratie
     fig.update_layout(
         title=f"Pairs Trading: {name1} vs {name2}",
         height=800,
@@ -291,7 +260,6 @@ def plot_trading_signals(df):
         legend=dict(orientation="h", y=1.1)
     )
     
-    # As labels
     fig.update_yaxes(title_text=f"{name1} Price", row=1, col=1, secondary_y=False)
     fig.update_yaxes(title_text=f"{name2} Price", row=1, col=1, secondary_y=True)
     fig.update_yaxes(title_text="Spread", row=2, col=1)
@@ -299,10 +267,9 @@ def plot_trading_signals(df):
     
     return fig
 
-# Toon de plot
 st.plotly_chart(plot_trading_signals(df), use_container_width=True)
 
-# Toon trading signals tabel
+# Aangepast gedeelte - hier was de fout
 with st.expander("📋 Trading Signals Table"):
     signals_df = df[df['signal'].notna()][[
         'signal', 'price1', 'price2', 'zscore',
@@ -312,14 +279,22 @@ with st.expander("📋 Trading Signals Table"):
         'liquidation1', 'liquidation2',
         'position_size'
     ]]
-    st.dataframe(signals_df.style.format("{:.6f}"))
+    
+    # Alleen numerieke kolommen formatteren
+    numeric_cols = signals_df.select_dtypes(include=[np.number]).columns
+    if not signals_df.empty:
+        st.dataframe(
+            signals_df.style.format(
+                {col: "{:.6f}" for col in numeric_cols}
+            )
+        )
+    else:
+        st.write("No trading signals found")
 
-# Backtesting sectie
 with st.expander("🔙 Backtesting"):
     st.header("Backtesting Results")
     
     if st.button("Run Backtest"):
-        # Vereenvoudigde backtest - implementeer je eigen logica
         initial_capital = 10000
         portfolio_value = initial_capital
         trades = []
