@@ -71,7 +71,7 @@ class PairTradingCalculator:
         entry_price1 = row['price1']
         entry_price2 = row['price2']
         
-        exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10
+        exit_price1 = entry_price1 * (1 - (row['zscore'] - zscore_exit_threshold)/10)
         exit_price2 = entry_price2 * (1 + (row['zscore'] - zscore_exit_threshold)/10)
         
         stoploss1 = entry_price1 * (1 + (row['zscore']/5))
