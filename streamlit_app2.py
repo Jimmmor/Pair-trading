@@ -383,10 +383,11 @@ with st.expander("📋 Trading Signals - Praktische Uitvoering", expanded=True):
     st.header("💰 Praktische Trade Uitvoering")
     
     # Huidige marktdata
+  # Huidige marktdata
     current_price1 = df['price1'].iloc[-1]
     current_price2 = df['price2'].iloc[-1]
     current_zscore = df['zscore'].iloc[-1]
-    hedge_ratio = df['hedge_ratio'].iloc[-1]  # Aantal eenheden asset2 per eenheid asset1
+    hedge_ratio = beta
     
     # Bereken fair value spread
     spread_mean = df['spread'].rolling(30).mean().iloc[-1]
