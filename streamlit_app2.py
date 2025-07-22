@@ -467,7 +467,7 @@ with st.expander("📋 Trading Signals - Praktische Uitvoering", expanded=True):
     # Spread
     fig.add_trace(go.Scatter(
         x=df.index,
-        y=df['price2'] - df['price1']*df['hedge_ratio'],
+        y=df['price2'] - df['price1']*beta,
         name='Actual Spread',
         line=dict(color='blue')
     ))
