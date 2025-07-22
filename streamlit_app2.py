@@ -197,118 +197,103 @@ df = calculator.calculate_trade_params(df)
 
 # Visualisatie
 def plot_trading_signals(df):
+    # Maak subplots met duidelijke specificaties
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
-        row_heights=[0.5, 0.25, 0.25],
-        specs=[[{"secondary_y": True}], [{}], [{}]]
+        row_heights=[0.6, 0.2, 0.2],
+        specs=[
+            [{"secondary_y": True}],  # Eerste rij heeft secundaire y-as
+            [{}],  # Tweede rij
+            [{}]   # Derde rij
+        ]
     )
     
-    # Prijsplot
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['price1'],
-        name=f"{name1} Price",
-        line=dict(color='#636EFA', width=2),
-        hovertemplate="%{y:.6f}"
-    ), row=1, col=1)
+    # Eerste asset (prijs1) - Primaire y-as
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['price1'],
+            name=f"{name1} Price",
+            line=dict(color='blue', width=2),
+            hovertemplate="%{y:.6f}"
+        ),
+        row=1, col=1,
+        secondary_y=False  # Expliciet aangeven als primaire y-as
+    )
 
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['price2'],
-        name=f"{name2} Price",
-        line=dict(color='#EF553B', width=2),
-        hovertemplate="%{y:.6f}",
-        secondary_y=True
-    ), row=1, col=1)
+    # Tweede asset (prijs2) - Secundaire y-as
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['price2'],
+            name=f"{name2} Price",
+            line=dict(color='red', width=2),
+            hovertemplate="%{y:.6f}"
+        ),
+        row=1, col=1,
+        secondary_y=True  # Expliciet aangeven als secundaire y-as
+    )
 
     # Spread plot
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['price1'] - df['price2'],
-        name="Spread",
-        line=dict(color='#00CC96', width=1),
-        hovertemplate="%{y:.6f}"
-    ), row=2, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['price1'] - df['price2'],
+            name="Spread",
+            line=dict(color='green', width=1),
+            hovertemplate="%{y:.6f}"
+        ),
+        row=2, col=1
+    )
 
     # Z-score plot
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['zscore'],
-        name="Z-score",
-        line=dict(color='#AB63FA', width=1.5),
-        hovertemplate="Z: %{y:.2f}"
-    ), row=3, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['zscore'],
+            name="Z-score",
+            line=dict(color='purple', width=1.5),
+            hovertemplate="Z: %{y:.2f}"
+        ),
+        row=3, col=1
+    )
 
-    # Threshold lines
-    for threshold, color, name in [
-        (zscore_entry_threshold, 'red', 'Entry Threshold'),
-        (-zscore_entry_threshold, 'green', 'Entry Threshold'),
-        (zscore_exit_threshold, 'pink', 'Exit Threshold'),
-        (-zscore_exit_threshold, 'lightgreen', 'Exit Threshold')
-    ]:
-        fig.add_hline(
-            y=threshold,
-            line=dict(color=color, width=1, dash="dot"),
-            row=3, col=1
-        )
+    # Threshold lines voor Z-score
+    fig.add_hline(
+        y=zscore_entry_threshold,
+        line=dict(color="red", width=1, dash="dash"),
+        row=3, col=1
+    )
+    fig.add_hline(
+        y=-zscore_entry_threshold,
+        line=dict(color="green", width=1, dash="dash"),
+        row=3, col=1
+    )
+    fig.add_hline(
+        y=zscore_exit_threshold,
+        line=dict(color="pink", width=1, dash="dot"),
+        row=3, col=1
+    )
+    fig.add_hline(
+        y=-zscore_exit_threshold,
+        line=dict(color="lightgreen", width=1, dash="dot"),
+        row=3, col=1
+    )
 
-    # Trade signals
-    signals = df[df['signal'].notna()]
-    for idx, row in signals.iterrows():
-        color = 'red' if row['signal'] == 'SHORT' else 'green'
-        direction = row['signal']
-        
-        # Prijsplot markers
-        fig.add_vline(
-            x=idx,
-            line=dict(color=color, width=1, dash='dash'),
-            row=1, col=1
-        )
-        
-        # Gedetailleerde annotatie
-        fig.add_annotation(
-            x=idx,
-            y=row['price1'],
-            text=f"<b>{direction}</b><br>"
-                 f"Entry: {row['entry_price1']:.6f}<br>"
-                 f"Exit: {row['exit_price1']:.6f}<br>"
-                 f"Stop: {row['stoploss1']:.6f}<br>"
-                 f"Liq: {row['liquidation1']:.6f}",
-            showarrow=True,
-            arrowhead=2,
-            ax=0,
-            ay=-40 if direction == 'SHORT' else 40,
-            bgcolor="white",
-            bordercolor=color,
-            borderwidth=1,
-            row=1, col=1
-        )
-
-        # Z-score markers
-        fig.add_vline(
-            x=idx,
-            line=dict(color=color, width=1),
-            row=3, col=1
-        )
-        
-        fig.add_annotation(
-            x=idx,
-            y=row['zscore'],
-            text=direction,
-            showarrow=False,
-            bgcolor=color,
-            font=dict(color='white'),
-            row=3, col=1
-        )
-
-    # Layout
+    # Layout configuratie
     fig.update_layout(
-        height=900,
+        title=f"Pairs Trading: {name1} vs {name2}",
+        height=800,
         hovermode="x unified",
-        margin=dict(l=50, r=50, t=80, b=50),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor='rgba(240,240,240,0.8)'
+        showlegend=True,
+        legend=dict(orientation="h", y=1.1)
     )
     
-    fig.update_yaxes(title_text="Price", row=1, col=1)
+    # As labels
+    fig.update_yaxes(title_text=f"{name1} Price", row=1, col=1, secondary_y=False)
+    fig.update_yaxes(title_text=f"{name2} Price", row=1, col=1, secondary_y=True)
     fig.update_yaxes(title_text="Spread", row=2, col=1)
     fig.update_yaxes(title_text="Z-score", row=3, col=1)
     
