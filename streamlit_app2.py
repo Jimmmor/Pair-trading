@@ -14,14 +14,18 @@ st.set_page_config(layout="wide")
 st.title("📈 Advanced Pairs Trading Monitor")
 
 # Sidebar instellingen
+# Sidebar instellingen - GECORRIGEERDE VERSIE
 with st.sidebar:
     st.header("🔍 Pair Selection")
-    # Gebruik de keys uit het tickers dictionary
-    ticker_keys = list(tickers.keys())
-    name1 = st.selectbox("Asset 1", ticker_keys, index=0)
-    # Filter de tweede selectie om dubbele selectie te voorkomen
-    remaining = [k for k in ticker_keys if k != name1]
-    name2 = st.selectbox("Asset 2", remaining, index=0 if len(remaining) > 1 else 0)
+    # Haal alle ticker keys op uit het geïmporteerde tickers dict
+    all_tickers = list(tickers.keys())
+    
+    # Eerste asset selectie
+    name1 = st.selectbox("Asset 1", all_tickers, index=0)
+    
+    # Tweede asset selectie (filter de geselecteerde eerste asset eruit)
+    remaining_tickers = [t for t in all_tickers if t != name1]
+    name2 = st.selectbox("Asset 2", remaining_tickers, index=0 if len(remaining_tickers) > 0 else 0)
     
     st.markdown("---")
     st.header("📊 Data Settings")
