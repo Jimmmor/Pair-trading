@@ -56,13 +56,10 @@ class PairTradingCalculator:
         spread_std = df['spread'].std()
         df['zscore'] = (df['spread'] - spread_mean) / spread_std
         
-        # Signal detection - GECORRIGEERDE VERSIE
-        conditions = [
-            df['zscore'] > zscore_entry_threshold,
-            df['zscore'] < -zscore_entry_threshold
-        ]
-        choices = ['SHORT', 'LONG']
-        df['signal'] = np.select(conditions, choices, default=np.nan)
+        # Signal detection - SIMPELE WERKENDE VERSIE
+        df['signal'] = np.nan  # Initialize with NaN
+        df.loc[df['zscore'] > zscore_entry_threshold, 'signal'] = 'SHORT'
+        df.loc[df['zscore'] < -zscore_entry_threshold, 'signal'] = 'LONG'
         
         # Bereken trade parameters voor alle signalen
         for idx, row in df[df['signal'].notna()].iterrows():
@@ -74,20 +71,7 @@ class PairTradingCalculator:
             for key, val in trade_params.items():
                 df.loc[idx, key] = val
         
-        return df
-            
-        # Bereken trade parameters voor alle signalen
-        for idx, row in df[df['signal'].notna()].iterrows():
-            if row['signal'] == 'SHORT':
-                trade_params = self._calculate_short_trade(row)
-            else:
-                trade_params = self._calculate_long_trade(row)
-            
-            for key, val in trade_params.items():
-                df.loc[idx, key] = val
-        
-        return df
-
+        return df     
     def _calculate_short_trade(self, row):
         entry_price1 = row['price1']
         entry_price2 = row['price2']
