@@ -882,7 +882,7 @@ with st.expander("🔍 Advanced Backtest Analysis", expanded=True):
         stop_loss_pct = st.slider("Stop Loss (%)", 5, 30, 15, 1)
     with col3:
         take_profit_pct = st.slider("Take Profit (%)", 10, 50, 25, 1)
-        lookback_period = st.slider("Lookback Period (days)", 10, 60, 30, 5)
+        lookback_period = st.slider("Lookback Period (days)", 10, 670, 30, 5)
     
     # Run backtest
     with st.spinner("Running backtest..."):
