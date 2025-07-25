@@ -162,8 +162,6 @@ if data1.empty or data2.empty:
     st.stop()
 
 df = preprocess_data(data1, data2)
-
-calculator = PairTradingCalculator(leverage=leverage, risk_per_trade=risk_per_trade)
 df = calculator.calculate_trade_params(df)
 
 # === STATISTICAL ANALYSIS SECTION ===
