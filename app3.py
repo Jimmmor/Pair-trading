@@ -29,8 +29,11 @@ with st.sidebar:
     corr_window = st.slider("Rolling correlation window (days)", 5, 60, 20)
     
     st.markdown("---")
-    st.header("Leverage")
+    st.header("⚙️ Trading Parameters")
+    zscore_entry_threshold = st.slider("Entry Z-score", 1.0, 5.0, 2.0, 0.1)
+    zscore_exit_threshold = st.slider("Exit Z-score", 0.0, 2.0, 0.5, 0.1)
     leverage = st.slider("Leverage", 1, 10, 3)
+    risk_per_trade = st.slider("Risk per trade (%)", 0.1, 5.0, 1.0, 0.1)
 
 class PairTradingCalculator:
     def __init__(self, leverage=1, risk_per_trade=0.01):
