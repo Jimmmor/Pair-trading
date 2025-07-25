@@ -879,9 +879,9 @@ with st.expander("🔍 Advanced Backtest Analysis", expanded=True):
         transaction_cost = st.slider("Transaction Cost (%)", 0.01, 1.0, 0.1, 0.01)
     with col2:
         max_position_size = st.slider("Max Position Size (%)", 10, 100, 50, 5)
-        stop_loss_pct = st.slider("Stop Loss (%)", 5, 30, 15, 1)
+        stop_loss_pct = st.slider("Stop Loss (%)", 1, 30, 15, 0.5)
     with col3:
-        take_profit_pct = st.slider("Take Profit (%)", 10, 50, 25, 1)
+        take_profit_pct = st.slider("Take Profit (%)", 1, 30, 25, 0.5)
         lookback_period = st.slider("Lookback Period (days)", 10, 60, 30, 5)
     
     # Run backtest
