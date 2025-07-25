@@ -652,7 +652,7 @@ with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
         
         st.dataframe(validation_df, use_container_width=True)
 # === ENHANCED BACKTESTING SECTION ===
-def run_advanced_backtest(df, entry_threshold, exit_threshold, initial_capital=100000, 
+def run_advanced_backtest(df, entry_threshold, exit_threshold, initial_capital=10, 
                          transaction_cost=0.1, max_position_size=50, stop_loss_pct=10, 
                          take_profit_pct=20, lookback_period=30):
     """
