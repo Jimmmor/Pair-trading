@@ -27,6 +27,10 @@ with st.sidebar:
     periode = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y"], index=2)
     interval = st.selectbox("Interval", ["1d"] if periode in ["6mo", "1y", "2y"] else ["1d", "1h", "30m"], index=0)
     corr_window = st.slider("Rolling correlation window (days)", 5, 60, 20)
+    
+    st.markdown("---")
+    st.header("Leverage")
+    leverage = st.slider("Leverage", 1, 10, 3)
 
 class PairTradingCalculator:
     def __init__(self, leverage=1, risk_per_trade=0.01):
@@ -162,6 +166,8 @@ if data1.empty or data2.empty:
     st.stop()
 
 df = preprocess_data(data1, data2)
+
+calculator = PairTradingCalculator(leverage=leverage, risk_per_trade=risk_per_trade)
 df = calculator.calculate_trade_params(df)
 
 # === STATISTICAL ANALYSIS SECTION ===
@@ -866,7 +872,7 @@ with st.expander("🔍 Advanced Backtest Analysis", expanded=True):
     # Backtest parameters
     col1, col2, col3 = st.columns(3)
     with col1:
-        initial_capital = st.number_input("Initial Capital ($)", 0, 1000000, 100000, 10000)
+        initial_capital = st.number_input("Initial Capital ($)", 10000, 1000000, 100000, 10000)
         transaction_cost = st.slider("Transaction Cost (%)", 0.01, 1.0, 0.1, 0.01)
     with col2:
         max_position_size = st.slider("Max Position Size (%)", 10, 100, 50, 5)
