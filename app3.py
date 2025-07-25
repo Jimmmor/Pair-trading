@@ -875,7 +875,7 @@ with st.expander("🔍 Advanced Backtest Analysis", expanded=True):
     # Backtest parameters
     col1, col2, col3 = st.columns(3)
     with col1:
-        initial_capital = st.number_input("Initial Capital ($)", 10000, 1000000, 100000, 10000)
+        initial_capital = st.number_input("Initial Capital ($)", 0, 1000000, 100000, 10000)
         transaction_cost = st.slider("Transaction Cost (%)", 0.01, 1.0, 0.1, 0.01)
     with col2:
         max_position_size = st.slider("Max Position Size (%)", 10, 100, 50, 5)
