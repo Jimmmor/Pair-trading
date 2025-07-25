@@ -378,437 +378,321 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             fig_scatter.update_traces(marker=dict(size=8, color='blue', opacity=0.6))
             st.plotly_chart(fig_scatter, use_container_width=True)
 
-# === TRADING SIGNALS SECTION - FIXED ===
+# === TRADING SIGNALS SECTION ===
 with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
     st.header("Praktische Trade Uitvoering")
     
-    # Gebruik de al berekende Z-score waardes (consistent met statistiek sectie)
+    # Huidige marktdata
+  # Huidige marktdata
     current_price1 = df['price1'].iloc[-1]
     current_price2 = df['price2'].iloc[-1]
-    current_zscore = df['zscore'].iloc[-1]  # Deze is al berekend met consistente parameters
+    current_zscore = df['zscore'].iloc[-1]
+    hedge_ratio = beta
     
-    # Gebruik de al berekende spread statistieken
-    X = df['price1'].values.reshape(-1, 1)
-    y = df['price2'].values
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    alpha = model.intercept_
-    beta = model.coef_[0]  # hedge ratio
-    
-    # Gebruik de al berekende spread mean en std (consistent)
-    spread_mean = df['spread'].mean()  # Zelfde als in statistiek sectie
-    spread_std = df['spread'].std()    # Zelfde als in statistiek sectie
-    
-    # Bereken fair value op basis van consistente parameters
-    current_spread = current_price2 - (alpha + beta * current_price1)
-    fair_value_spread = spread_mean  # Target spread
-    fair_value2 = current_price1 * beta + alpha + fair_value_spread
+    # Bereken fair value spread
+    spread_mean = df['spread'].rolling(30).mean().iloc[-1]
+    fair_value2 = df['price1'].iloc[-1] * hedge_ratio + spread_mean
     
     # Toon huidige marktsituatie
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(f"{name1} Prijs", f"${current_price1:.4f}")
     with col2:
         st.metric(f"{name2} Prijs", f"${current_price2:.4f}")
     with col3:
-        st.metric("Current Z-score", f"{current_zscore:.2f}")
-    with col4:
-        st.metric("Current Spread", f"${current_spread:.4f}")
+        st.metric("Fair Value Spread", f"${fair_value2:.4f}")
     
-    # Trade execution parameters - consistent Z-score logic
+    # Trade execution parameters
     if current_zscore < -zscore_entry_threshold:
         st.success(f"**LONG SPREAD SIGNAL (Z = {current_zscore:.2f})**")
         st.markdown(f"""
-        ### 📈 Uitvoering LONG SPREAD:
+        ### 📈 Uitvoering:
         1. **Koop {name1}** tegen huidige prijs: ${current_price1:.4f}
-        2. **Verkoop {beta:.4f} eenheden {name2}** per {name1} tegen: ${current_price2:.4f}
-        3. **Hedge Ratio**: 1 {name1} = {beta:.4f} {name2}
+        2. **Verkoop {hedge_ratio:.4f} {name2}** per {name1} tegen: ${current_price2:.4f}
+        3. **Hedge Ratio**: 1 {name1} = {hedge_ratio:.4f} {name2}
         
-        ### 🎯 Trading Logic:
-        - **Huidige spread**: ${current_spread:.4f} (te laag)
-        - **Gemiddelde spread**: ${spread_mean:.4f} (target)
-        - **Verwacht herstel**: Spread stijgt naar gemiddelde
-        - **Exit bij Z-score**: -{zscore_exit_threshold:.1f} (spread normaliseert)
-        
-        ### 💡 Waarom deze trade?
-        Z-score van {current_zscore:.2f} betekent dat de spread {abs(current_zscore):.1f} standaarddeviaties onder het gemiddelde ligt.
-        Historisch keert dit terug naar het gemiddelde.
+        ### 🔎 Verwacht Herstel:
+        - Richting fair value: ${fair_value2:.4f} (+{(fair_value2-current_price2)/current_price2*100:.2f}%)
+        - Target spread: ${spread_mean:.4f}
         """)
         
     elif current_zscore > zscore_entry_threshold:
         st.error(f"**SHORT SPREAD SIGNAL (Z = {current_zscore:.2f})**")
         st.markdown(f"""
-        ### 📉 Uitvoering SHORT SPREAD:
+        ### 📉 Uitvoering:
         1. **Verkoop {name1}** tegen huidige prijs: ${current_price1:.4f}
-        2. **Koop {beta:.4f} eenheden {name2}** per {name1} tegen: ${current_price2:.4f}
-        3. **Hedge Ratio**: 1 {name1} = {beta:.4f} {name2}
+        2. **Koop {hedge_ratio:.4f} {name2}** per {name1} tegen: ${current_price2:.4f}
+        3. **Hedge Ratio**: 1 {name1} = {hedge_ratio:.4f} {name2}
         
-        ### 🎯 Trading Logic:
-        - **Huidige spread**: ${current_spread:.4f} (te hoog)
-        - **Gemiddelde spread**: ${spread_mean:.4f} (target)
-        - **Verwacht herstel**: Spread daalt naar gemiddelde
-        - **Exit bij Z-score**: {zscore_exit_threshold:.1f} (spread normaliseert)
-        
-        ### 💡 Waarom deze trade?
-        Z-score van {current_zscore:.2f} betekent dat de spread {current_zscore:.1f} standaarddeviaties boven het gemiddelde ligt.
-        Historisch keert dit terug naar het gemiddelde.
+        ###Verwacht Herstel:
+        - Richting fair value: ${fair_value2:.4f} ({(fair_value2-current_price2)/current_price2*100:.2f}%)
+        - Target spread: ${spread_mean:.4f}
         """)
     else:
         st.info(f"**GEEN SIGNAL (Z = {current_zscore:.2f})**")
-        
-        # Toon afstand tot entry levels
-        distance_to_long = abs(current_zscore - (-zscore_entry_threshold))
-        distance_to_short = abs(current_zscore - zscore_entry_threshold)
-        
         st.markdown(f"""
-        ### ⏳ Wacht op entry signaal:
-        - **LONG entry** bij Z < -{zscore_entry_threshold:.1f} (nog {distance_to_long:.2f} punten)
-        - **SHORT entry** bij Z > {zscore_entry_threshold:.1f} (nog {distance_to_short:.2f} punten)
-        
-        ### 📊 Huidige status:
-        - Spread is {abs(current_zscore):.1f} standaarddeviaties van gemiddelde
-        - {"Boven" if current_zscore > 0 else "Onder"} gemiddelde spread
+        ### ⏳ Wacht op:
+        - LONG entry onder Z = -{zscore_entry_threshold:.1f}
+        - SHORT entry boven Z = {zscore_entry_threshold:.1f}
         """)
     
-    # Toon praktische trading levels - consistent met hoofdberekening
+    # Toon praktische trading levels
     st.markdown("---")
-    st.subheader("Trading Parameters (Consistent)")
+    st.subheader("Trading Parameters")
     
-    # Bereken entry/exit levels in werkelijke prijzen
-    long_entry_spread = spread_mean - zscore_entry_threshold * spread_std
-    long_exit_spread = spread_mean - zscore_exit_threshold * spread_std
-    short_entry_spread = spread_mean + zscore_entry_threshold * spread_std
-    short_exit_spread = spread_mean + zscore_exit_threshold * spread_std
+    entry_levels = pd.DataFrame({
+        'Parameter': [
+            'Hedge Ratio',
+            'Spread Mean',
+            'Spread STD',
+            'Current Spread',
+            'Z-score Entry',
+            'Z-score Exit'
+        ],
+        'Waarde': [
+            f"{hedge_ratio:.4f} {name2}/{name1}",
+            f"${spread_mean:.4f}",
+            f"${df['spread'].rolling(30).std().iloc[-1]:.4f}",
+            f"${current_price2 - current_price1*hedge_ratio:.4f}",
+            f"±{zscore_entry_threshold:.1f}",
+            f"±{zscore_exit_threshold:.1f}"
+        ]
+    })
     
-    col1, col2 = st.columns(2)
+    st.table(entry_levels)
     
-    with col1:
-        entry_levels = pd.DataFrame({
-            'Parameter': [
-                'Alpha (α)',
-                'Beta/Hedge Ratio (β)', 
-                'Spread Mean',
-                'Spread Std Dev',
-                'Current Spread',
-                'Current Z-score'
-            ],
-            'Waarde': [
-                f"{alpha:.6f}",
-                f"{beta:.4f}",
-                f"${spread_mean:.4f}",
-                f"${spread_std:.4f}",
-                f"${current_spread:.4f}",
-                f"{current_zscore:.2f}"
-            ]
-        })
-        st.table(entry_levels)
-    
-    with col2:
-        trading_levels = pd.DataFrame({
-            'Level': [
-                'Long Entry Spread',
-                'Long Exit Spread', 
-                'Short Entry Spread',
-                'Short Exit Spread'
-            ],
-            'Z-score': [
-                f"-{zscore_entry_threshold:.1f}",
-                f"-{zscore_exit_threshold:.1f}",
-                f"+{zscore_entry_threshold:.1f}",
-                f"+{zscore_exit_threshold:.1f}"
-            ],
-            'Spread Value': [
-                f"${long_entry_spread:.4f}",
-                f"${long_exit_spread:.4f}",
-                f"${short_entry_spread:.4f}",
-                f"${short_exit_spread:.4f}"
-            ]
-        })
-        st.table(trading_levels)
-    
-    # FIXED: Gebruik de al berekende Z-score (consistent met statistiek sectie)
-    st.subheader("Z-score Trading Chart (Consistent)")
-    
+    # Visualisatie van spread met trading levels
     fig = go.Figure()
     
-    # Z-score lijn (gebruik al berekende waardes)
+    # Spread
     fig.add_trace(go.Scatter(
         x=df.index,
-        y=df['zscore'],  # Deze is al correct berekend in het begin
-        name='Z-score',
-        line=dict(color='blue', width=2),
-        hovertemplate='<b>Date</b>: %{x}<br><b>Z-score</b>: %{y:.2f}<extra></extra>'
+        y=df['price2'] - df['price1']*beta,
+        name='Actual Spread',
+        line=dict(color='blue')
     ))
     
-    # Mean lijn (bij z-score = 0)
-    fig.add_hline(
-        y=0,
-        line=dict(color='black', width=1),
-        annotation_text="Mean (Z=0)",
-        annotation_position="top right"
-    )
+    # Mean
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=[spread_mean]*len(df),
+        name='Mean Spread',
+        line=dict(color='green', dash='dash')
+    ))
     
     # Entry levels
-    fig.add_hline(
-        y=zscore_entry_threshold,
-        line=dict(color='red', dash='dash', width=2),
-        annotation_text=f"SHORT Entry (Z=+{zscore_entry_threshold})",
-        annotation_position="top right"
-    )
+    entry_upper = spread_mean + zscore_entry_threshold * df['spread'].rolling(30).std().iloc[-1]
+    entry_lower = spread_mean - zscore_entry_threshold * df['spread'].rolling(30).std().iloc[-1]
     
-    fig.add_hline(
-        y=-zscore_entry_threshold,
-        line=dict(color='green', dash='dash', width=2),
-        annotation_text=f"LONG Entry (Z=-{zscore_entry_threshold})",
-        annotation_position="bottom right"
-    )
-    
-    # Exit levels
-    fig.add_hline(
-        y=zscore_exit_threshold,
-        line=dict(color='pink', dash='dot', width=1),
-        annotation_text=f"SHORT Exit (Z=+{zscore_exit_threshold})",
-        annotation_position="top left"
-    )
-    
-    fig.add_hline(
-        y=-zscore_exit_threshold,
-        line=dict(color='lightgreen', dash='dot', width=1),
-        annotation_text=f"LONG Exit (Z=-{zscore_exit_threshold})",
-        annotation_position="bottom left"
-    )
-    
-    # Markeer huidige positie
     fig.add_trace(go.Scatter(
-        x=[df.index[-1]],
-        y=[current_zscore],
-        mode='markers',
-        marker=dict(
-            size=15,
-            color='yellow',
-            symbol='star',
-            line=dict(color='black', width=2)
-        ),
-        name=f'Current (Z={current_zscore:.2f})',
-        hovertemplate=f'<b>Current Position</b><br>Z-score: {current_zscore:.2f}<extra></extra>'
+        x=df.index,
+        y=[entry_upper]*len(df),
+        name='Short Entry',
+        line=dict(color='red', dash='dot')
     ))
     
-    # Kleur de trading zones
-    fig.add_hrect(
-        y0=zscore_entry_threshold, y1=5,
-        fillcolor="rgba(255,0,0,0.1)",
-        layer="below", line_width=0,
-        annotation_text="SHORT Zone", 
-        annotation_position="top left",
-        annotation=dict(font_size=12, font_color="darkred")
-    )
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=[entry_lower]*len(df),
+        name='Long Entry',
+        line=dict(color='green', dash='dot')
+    ))
     
-    fig.add_hrect(
-        y0=-5, y1=-zscore_entry_threshold,
-        fillcolor="rgba(0,255,0,0.1)",
-        layer="below", line_width=0,
-        annotation_text="LONG Zone", 
-        annotation_position="bottom left",
-        annotation=dict(font_size=12, font_color="darkgreen")
-    )
+    # Exit levels
+    exit_upper = spread_mean + zscore_exit_threshold * df['spread'].rolling(30).std().iloc[-1]
+    exit_lower = spread_mean - zscore_exit_threshold * df['spread'].rolling(30).std().iloc[-1]
     
-    # Neutrale zone
-    fig.add_hrect(
-        y0=-zscore_entry_threshold, y1=zscore_entry_threshold,
-        fillcolor="rgba(128,128,128,0.05)",
-        layer="below", line_width=0,
-        annotation_text="Neutral Zone", 
-        annotation_position="middle center",
-        annotation=dict(font_size=10, font_color="gray")
-    )
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=[exit_upper]*len(df),
+        name='Short Exit',
+        line=dict(color='pink', dash='dot')
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=[exit_lower]*len(df),
+        name='Long Exit',
+        line=dict(color='lightgreen', dash='dot')
+    ))
     
     fig.update_layout(
-        title=f"Z-score Trading Levels - {name1} vs {name2} (Consistent Calculation)",
-        xaxis_title="Date",
-        yaxis_title="Z-score",
-        height=500,
-        showlegend=True,
-        hovermode='x unified',
-        template='plotly_white'
+        title=f"Spread Trading Levels ({name1} vs {name2})",
+        yaxis_title="Spread Value (USD)",
+        height=400
     )
     
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Voeg een validatie toe
-    st.markdown("---")
-    with st.expander("🔍 Calculation Validation", expanded=False):
-        st.markdown("""
-        **Validation Check**: Deze Z-scores zijn nu consistent met de Statistical Analysis sectie.
-        
-        **Berekening**:
-        1. Spread = Price2 - (α + β × Price1)  
-        2. Z-score = (Spread - Mean(Spread)) / Std(Spread)
-        3. Gebruik dezelfde parameters door hele app
-        
-        **Key Parameters**:
-        """)
-        
-        validation_df = pd.DataFrame({
-            'Parameter': ['Alpha (α)', 'Beta (β)', 'Spread Mean', 'Spread Std', 'Current Spread', 'Current Z-score'],
-            'Value': [f"{alpha:.6f}", f"{beta:.4f}", f"{spread_mean:.6f}", f"{spread_std:.6f}", f"{current_spread:.6f}", f"{current_zscore:.4f}"],
-            'Used In': ['Spread calc', 'Spread calc', 'Z-score calc', 'Z-score calc', 'Display', 'Trading logic']
-        })
-        
-        st.dataframe(validation_df, use_container_width=True)
-
-# === ENHANCED BACKTESTING SECTION ===
-def run_advanced_backtest(df, entry_threshold, exit_threshold, initial_capital, 
-                         transaction_cost, max_position_size, stop_loss_pct, 
-                         take_profit_pct, lookback_period=30):
-    """
-    Verbeterde backtest met meer realistische berekeningen
-    """
+# === BACKTESTING SECTION ===
+def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transaction_cost, max_position_size, stop_loss_pct, take_profit_pct):
     X = df['price1'].values.reshape(-1, 1)
     y = df['price2'].values
     model = LinearRegression()
     model.fit(X, y)
     
-    df = df.copy()
     df['spread'] = df['price2'] - (model.intercept_ + model.coef_[0] * df['price1'])
-    
-    # Rolling statistics voor meer realistische berekeningen
-    df['spread_mean'] = df['spread'].rolling(lookback_period).mean()
-    df['spread_std'] = df['spread'].rolling(lookback_period).std()
-    df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std']
+    spread_mean = df['spread'].mean()
+    spread_std = df['spread'].std()
+    df['zscore'] = (df['spread'] - spread_mean) / spread_std
     
     cash = initial_capital
     position = 0
-    shares1 = 0
-    shares2 = 0
+    coin1_shares = 0
+    coin2_shares = 0
     entry_price1 = 0
     entry_price2 = 0
     entry_date = None
-    entry_zscore = 0
+    position_value = 0
     max_position_value = (max_position_size / 100) * initial_capital
     
     trades = []
     portfolio_values = []
     positions = []
-    drawdowns = []
-    peak_value = initial_capital
 
-    for i in range(lookback_period, len(df)):  # Start na lookback periode
+    for i in range(len(df)):
         current_zscore = df['zscore'].iloc[i]
         current_price1 = df['price1'].iloc[i]
         current_price2 = df['price2'].iloc[i]
         current_date = df.index[i]
         
-        # Bereken huidige portfolio waarde
-        if position != 0:
-            position_value = shares1 * current_price1 + shares2 * current_price2
-            portfolio_value = cash + position_value
-        else:
-            portfolio_value = cash
+        position_market_value = coin1_shares * current_price1 + coin2_shares * current_price2
+        portfolio_value = cash + position_market_value
         
-        # Track drawdown
-        if portfolio_value > peak_value:
-            peak_value = portfolio_value
-        drawdown = (peak_value - portfolio_value) / peak_value * 100
-        drawdowns.append(drawdown)
-        
-        # Entry logic - alleen als geen positie open staat
-        if position == 0 and not pd.isna(current_zscore):
+        # Entry logic
+        if position == 0 and i > 0:
             if current_zscore < -entry_threshold:  # Long spread
                 position = 1
-                position_size = min(max_position_value, portfolio_value * 0.9)
-                
-                # Bereken hedge ratio dynamisch
-                hedge_ratio = model.coef_[0]
-                
-                # Posities berekenen
-                notional_per_leg = position_size / 2
-                shares1 = notional_per_leg / current_price1  # Long asset 1
-                shares2 = -(notional_per_leg / current_price2) * hedge_ratio  # Short asset 2
-                
+                position_value = min(max_position_value, portfolio_value * 0.95)
+                coin2_shares = (position_value / 2) / current_price2
+                coin1_shares = -(position_value / 2) / current_price1
                 entry_price1 = current_price1
                 entry_price2 = current_price2
                 entry_date = current_date
-                entry_zscore = current_zscore
-                
-                # Transaction costs
-                total_notional = abs(shares1 * current_price1) + abs(shares2 * current_price2)
-                transaction_fee = total_notional * (transaction_cost / 100)
-                cash -= transaction_fee
+                cash -= position_value * (transaction_cost / 100)
                 
             elif current_zscore > entry_threshold:  # Short spread
                 position = -1
-                position_size = min(max_position_value, portfolio_value * 0.9)
-                
-                hedge_ratio = model.coef_[0]
-                
-                notional_per_leg = position_size / 2
-                shares1 = -(notional_per_leg / current_price1)  # Short asset 1
-                shares2 = (notional_per_leg / current_price2) * hedge_ratio  # Long asset 2
-                
+                position_value = min(max_position_value, portfolio_value * 0.95)
+                coin1_shares = (position_value / 2) / current_price1
+                coin2_shares = -(position_value / 2) / current_price2
                 entry_price1 = current_price1
                 entry_price2 = current_price2
                 entry_date = current_date
-                entry_zscore = current_zscore
-                
-                total_notional = abs(shares1 * current_price1) + abs(shares2 * current_price2)
-                transaction_fee = total_notional * (transaction_cost / 100)
-                cash -= transaction_fee
+                cash -= position_value * (transaction_cost / 100)
         
         # Exit logic
-        elif position != 0 and not pd.isna(current_zscore):
+        elif position != 0:
             exit_trade = False
             exit_reason = ""
             
-            # Z-score mean reversion exit
-            if (position == 1 and current_zscore > -exit_threshold) or \
-               (position == -1 and current_zscore < exit_threshold):
+            if abs(current_zscore) < exit_threshold:
                 exit_trade = True
-                exit_reason = "Mean reversion"
+                exit_reason = "Z-score exit"
             
-            # P&L berekening
-            current_position_value = shares1 * current_price1 + shares2 * current_price2
-            pnl = current_position_value
-            pnl_pct = (pnl / max_position_value) * 100 if max_position_value > 0 else 0
+            pnl_dollar = (coin1_shares * (current_price1 - entry_price1) + 
+                         coin2_shares * (current_price2 - entry_price2))
+            pnl_pct = (pnl_dollar / position_value) * 100
             
-            # Stop loss
             if pnl_pct < -stop_loss_pct:
                 exit_trade = True
                 exit_reason = "Stop loss"
-            
-            # Take profit
             elif pnl_pct > take_profit_pct:
                 exit_trade = True
                 exit_reason = "Take profit"
             
-            # Time-based exit (maximum 30 dagen)
-            elif (current_date - entry_date).days > 30:
-                exit_trade = True
-                exit_reason = "Time exit"
-            
             if exit_trade:
-                # Sluit positie
-                exit_value = shares1 * current_price1 + shares2 * current_price2
-                total_notional = abs(shares1 * current_price1) + abs(shares2 * current_price2)
-                exit_transaction_fee = total_notional * (transaction_cost / 100)
-                final_pnl = exit_value - exit_transaction_fee
-                
-                cash += final_pnl
+                final_pnl = pnl_dollar - (abs(coin1_shares * current_price1) + abs(coin2_shares * current_price2)) * (transaction_cost / 100)
+                cash += (coin1_shares * current_price1 + coin2_shares * current_price2 + final_pnl)
                 
                 trades.append({
                     'Entry Date': entry_date,
                     'Exit Date': current_date,
                     'Position': 'Long Spread' if position == 1 else 'Short Spread',
-                    'Entry Z-score': entry_zscore,
+                    'Entry Z-score': df['zscore'].loc[entry_date],
                     'Exit Z-score': current_zscore,
                     'Entry Price 1': entry_price1,
                     'Entry Price 2': entry_price2,
                     'Exit Price 1': current_price1,
                     'Exit Price 2': current_price2,
-                    'Shares 1': shares1,
-                    'Shares 2': shares2,
-                    'Position Size': max_position_value,
+                    'Coin1 Shares': coin1_shares,
+                    'Coin2 Shares': coin2_shares,
+                    'Position Size': position_value,
                     'P&L': final_pnl,
-                    'P&L %': (final_pnl / max_position_value) * 100,
+                    'P&L %': (final_pnl / position_value) * 100,
                     'Exit Reason': exit_reason,
                     'Days Held': (current_date - entry_date).days
+                })
+                
+                position = 0
+                coin1_shares = 0
+                coin2_shares = 0
+                entry_price1 = 0
+                entry_price2 = 0
+                entry_date = None
+                position_value = 0
+        
+        portfolio_values.append(portfolio_value)
+        positions.append(position)
+    
+    df_result = df.copy()
+    df_result['portfolio_value'] = portfolio_values
+    df_result['position'] = positions
+    return df_result, trades
+
+with st.expander("Backtesting", expanded=False):
+    st.header("Backtesting")
+    
+    with st.sidebar:
+        st.markdown("---")
+        st.header("🎯 Backtesting Settings")
+        initial_capital = st.number_input("Initial Capital (USD)", min_value=1000, max_value=1000000, value=10000, step=1000)
+        transaction_cost = st.slider("Transaction Cost (%)", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
+        max_position_size = st.slider("Max position size (% of capital)", min_value=10, max_value=100, value=50, step=10)
+        
+        st.subheader("🛡️ Risk Management")
+        stop_loss_pct = st.slider("Stop Loss (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.5)
+        take_profit_pct = st.slider("Take Profit (%)", min_value=0.0, max_value=50.0, value=10.0, step=1.0)
+    
+    if st.button("Run Backtest"):
+        df_backtest, trades = run_backtest(
+            df, zscore_entry_threshold, zscore_exit_threshold,
+            initial_capital, transaction_cost, max_position_size,
+            stop_loss_pct, take_profit_pct
+        )
+        
+        if len(trades) > 0:
+            trades_df = pd.DataFrame(trades)
+            final_value = df_backtest['portfolio_value'].iloc[-1]
+            total_return = ((final_value - initial_capital) / initial_capital) * 100
+            
+            st.success(f"Backtest complete! Total return: {total_return:.2f}%")
+            
+            tab1, tab2 = st.tabs(["Performance Metrics", "Trade History"])
+            
+            with tab1:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Final Value", f"${final_value:,.2f}")
+                    st.metric("Number of Trades", len(trades_df))
+                    winning_trades = trades_df[trades_df['P&L'] > 0]
+                    st.metric("Win Rate", f"{len(winning_trades)/len(trades_df)*100:.1f}%")
+                
+                with col2:
+                    st.metric("Avg Win Trade", f"${winning_trades['P&L'].mean():.2f}")
+                    losing_trades = trades_df[trades_df['P&L'] < 0]
+                    st.metric("Avg Loss Trade", f"${losing_trades['P&L'].mean():.2f}")
+                    st.metric("Profit Factor", f"{abs(winning_trades['P&L'].sum()/losing_trades['P&L'].sum()):.2f}")
+            
+            with tab2:
+                st.dataframe(trades_df.sort_values('Exit Date', ascending=False))
+            
+            # Portfolio value chart
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_backtest.index,
+                y=df_backtest['portfolio_value'],
+                name='Portfolio Value'
+            ))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("No trades executed during backtest")
