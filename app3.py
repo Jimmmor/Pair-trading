@@ -600,8 +600,7 @@ with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
         fillcolor="rgba(255,0,0,0.1)",
         layer="below", line_width=0,
         annotation_text="SHORT Zone", 
-        annotation_position="top left",
-        annotation=dict(font_size=12, font_color="darkred")
+        annotation_position="top left"
     )
     
     fig.add_hrect(
@@ -609,18 +608,14 @@ with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
         fillcolor="rgba(0,255,0,0.1)",
         layer="below", line_width=0,
         annotation_text="LONG Zone", 
-        annotation_position="bottom left",
-        annotation=dict(font_size=12, font_color="darkgreen")
+        annotation_position="bottom left"
     )
     
     # Neutrale zone
     fig.add_hrect(
         y0=-zscore_entry_threshold, y1=zscore_entry_threshold,
         fillcolor="rgba(128,128,128,0.05)",
-        layer="below", line_width=0,
-        annotation_text="Neutral Zone", 
-        annotation_position="middle center",
-        annotation=dict(font_size=10, font_color="gray")
+        layer="below", line_width=0
     )
     
     fig.update_layout(
