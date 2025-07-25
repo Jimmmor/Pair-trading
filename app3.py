@@ -684,4 +684,4 @@ def run_advanced_backtest(df, entry_threshold, exit_threshold, initial_capital,
                     'P&L': final_pnl,
                     'P&L %': (final_pnl / max_position_value) * 100,
                     'Exit Reason': exit_reason,
-                    'Days
+                    'Days Held': (current_date - entry_date).days
