@@ -11,11 +11,11 @@ from constants.tickers import tickers
 
 # Pagina-instellingen
 st.set_page_config(layout="wide")
-st.title("📈 Advanced Pairs Trading Monitor")
+st.title("Advanced Pairs Trading Monitor")
 
 # Sidebar instellingen
 with st.sidebar:
-    st.header("🔍 Pair Selection")
+    st.header("Pair Selection")
     all_tickers = list(tickers.keys())
     
     name1 = st.selectbox("Asset 1", all_tickers, index=0)
@@ -379,8 +379,8 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             st.plotly_chart(fig_scatter, use_container_width=True)
 
 # === TRADING SIGNALS SECTION ===
-with st.expander("📋 Trading Signals - Praktische Uitvoering", expanded=True):
-    st.header("💰 Praktische Trade Uitvoering")
+with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
+    st.header("Praktische Trade Uitvoering")
     
     # Huidige marktdata
   # Huidige marktdata
@@ -424,7 +424,7 @@ with st.expander("📋 Trading Signals - Praktische Uitvoering", expanded=True):
         2. **Koop {hedge_ratio:.4f} {name2}** per {name1} tegen: ${current_price2:.4f}
         3. **Hedge Ratio**: 1 {name1} = {hedge_ratio:.4f} {name2}
         
-        ### 🔎 Verwacht Herstel:
+        ###Verwacht Herstel:
         - Richting fair value: ${fair_value2:.4f} ({(fair_value2-current_price2)/current_price2*100:.2f}%)
         - Target spread: ${spread_mean:.4f}
         """)
@@ -438,7 +438,7 @@ with st.expander("📋 Trading Signals - Praktische Uitvoering", expanded=True):
     
     # Toon praktische trading levels
     st.markdown("---")
-    st.subheader("🔧 Trading Parameters")
+    st.subheader("Trading Parameters")
     
     entry_levels = pd.DataFrame({
         'Parameter': [
@@ -639,8 +639,8 @@ def run_backtest(df, entry_threshold, exit_threshold, initial_capital, transacti
     df_result['position'] = positions
     return df_result, trades
 
-with st.expander("🔙 Backtesting", expanded=False):
-    st.header("🔙 Backtesting")
+with st.expander("Backtesting", expanded=False):
+    st.header("Backtesting")
     
     with st.sidebar:
         st.markdown("---")
@@ -696,16 +696,3 @@ with st.expander("🔙 Backtesting", expanded=False):
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No trades executed during backtest")
-
-# Export functionality
-with st.expander("📤 Export", expanded=False):
-    st.header("📤 Export Data")
-    if 'df_backtest' in locals():
-        if st.button("Export backtest results"):
-            csv = df_backtest.to_csv(index=True)
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name=f"backtest_results_{name1}_{name2}.csv",
-                mime='text/csv'
-            )
