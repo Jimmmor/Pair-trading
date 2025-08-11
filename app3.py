@@ -380,58 +380,66 @@ with st.expander("📊 Statistical Analysis", expanded=True):
 # === IMPROVED PRACTICAL TRADING EXECUTION SECTION ===
 with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True):
     st.header("🎯 Praktische Trade Uitvoering - USDT Coin Paren")
-    
-    # Consistent calculations with main analysis
-    X = df['price1'].values.reshape(-1, 1)
-    y = df['price2'].values
+
+    # === HEDGE RATIO & SPREAD CONSISTENT ===
+    # Regressie: price1 ~ price2 (consistent met spread = price1 - beta*price2)
+    X = df['price2'].values.reshape(-1, 1)  # onafhankelijke variabele
+    y = df['price1'].values                 # afhankelijke variabele
     model = LinearRegression()
     model.fit(X, y)
-    
+
     alpha = model.intercept_
     beta = model.coef_[0]  # hedge ratio
-    
-    # Current market data
-    current_price1 = df['price1'].iloc[-1]  # Current price Asset 1
-    current_price2 = df['price2'].iloc[-1]  # Current price Asset 2
-    current_spread = df['spread'].iloc[-1]  # Already calculated consistently
-    current_zscore = df['zscore'].iloc[-1]  # Already calculated consistently
-    
+
+    # Spread consistent definiëren
+    df['spread'] = df['price1'] - beta * df['price2']
     spread_mean = df['spread'].mean()
     spread_std = df['spread'].std()
-    
+
+    # Current market data
+    current_price1 = df['price1'].iloc[-1]  
+    current_price2 = df['price2'].iloc[-1]  
+    current_spread = df['spread'].iloc[-1]  
+    current_zscore = (current_spread - spread_mean) / spread_std  
+
     # === TRADING CAPITAL INPUT ===
     st.subheader("💰 Jouw Trading Capital")
-    
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        trading_capital = st.number_input("💵 Trading Budget (USDT)", 
-                                        min_value=50, max_value=100000, 
-                                        value=1000, step=25,
-                                        help="Minimum 50 USDT voor pairs trading")
+        trading_capital = st.number_input(
+            "💵 Trading Budget (USDT)", 
+            min_value=50, max_value=100000, 
+            value=1000, step=25,
+            help="Minimum 50 USDT voor pairs trading"
+        )
     with col2:
-        risk_per_trade = st.slider("🎯 Risico per Trade (%)", 
-                                 min_value=1.0, max_value=10.0, 
-                                 value=2.0, step=0.5,
-                                 help="Maximaal verlies dat je accepteert")
+        risk_per_trade = st.slider(
+            "🎯 Risico per Trade (%)", 
+            min_value=1.0, max_value=10.0, 
+            value=2.0, step=0.5,
+            help="Maximaal verlies dat je accepteert"
+        )
     with col3:
         max_risk_usdt = trading_capital * (risk_per_trade / 100)
         st.metric("Max Verlies per Trade", f"{max_risk_usdt:.2f} USDT")
-    
+
     # === CURRENT MARKET STATUS ===
     st.subheader("📊 Huidige Marktsituatie")
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric(f"{name1}", f"{current_price1:.8f} USDT")
     with col2:
         st.metric(f"{name2}", f"{current_price2:.8f} USDT")
     with col3:
-        color = "normal"
-        if abs(current_zscore) >= zscore_entry_threshold:
-            color = "inverse"
-        st.metric("Z-Score", f"{current_zscore:.2f}", 
-                 delta=f"{'TRADE!' if abs(current_zscore) >= zscore_entry_threshold else 'Wacht'}", 
-                 delta_color=color)
+        color = "inverse" if abs(current_zscore) >= zscore_entry_threshold else "normal"
+        st.metric(
+            "Z-Score", 
+            f"{current_zscore:.2f}", 
+            delta=f"{'TRADE!' if abs(current_zscore) >= zscore_entry_threshold else 'Wacht'}", 
+            delta_color=color
+        )
     with col4:
         st.metric("Hedge Ratio", f"{beta:.6f}")
     
