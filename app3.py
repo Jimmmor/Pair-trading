@@ -423,9 +423,9 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(f"{name1}", f"{current_price1:.6f} USDT")
+        st.metric(f"{name1}", f"{current_price1:.8f} USDT")
     with col2:
-        st.metric(f"{name2}", f"{current_price2:.6f} USDT")
+        st.metric(f"{name2}", f"{current_price2:.8f} USDT")
     with col3:
         color = "normal"
         if abs(current_zscore) >= zscore_entry_threshold:
@@ -481,13 +481,20 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         # Calculate exact positions for the trading capital
         usable_capital = trading_capital * 0.98  # 2% buffer for fees
         
-        # Position sizing with proper hedge ratio
-        # Long spread = Long Asset1, Short Asset2
-        capital_asset1 = usable_capital / (1 + beta)
-        capital_asset2 = capital_asset1 * beta
+        # IMPROVED Position sizing - Equal dollar amounts for better hedge
+        # Instead of using hedge ratio for capital split, use equal dollar amounts
         
-        shares_asset1 = capital_asset1 / current_price1
-        shares_asset2 = capital_asset2 / current_price2  # Dit wordt SHORT
+        # Method 1: Equal Dollar Split (Better for small accounts)
+        capital_per_leg = usable_capital / 2
+        shares_asset1 = capital_per_leg / current_price1
+        shares_asset2_raw = capital_per_leg / current_price2
+        
+        # Apply hedge ratio to the SHORT position for proper correlation
+        shares_asset2 = shares_asset2_raw * beta  # Adjust SHORT size by hedge ratio
+        
+        # Recalculate actual costs with proper hedge ratio
+        cost_asset1 = shares_asset1 * current_price1
+        cost_asset2 = shares_asset2 * current_price2
         
         # Calculate costs
         cost_asset1 = shares_asset1 * current_price1
@@ -500,8 +507,8 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         with col1:
             st.markdown(f"""
             #### 🟢 KOOP {name1}
-            - **Aantal**: {shares_asset1:.6f} {name1}
-            - **Huidige Prijs**: {current_price1:.6f} USDT
+            - **Aantal**: {shares_asset1:.4f} {name1}
+            - **Huidige Prijs**: {current_price1:.8f} USDT
             - **Totaal**: {cost_asset1:.2f} USDT
             - **Order Type**: MARKET BUY
             """)
@@ -509,13 +516,45 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         with col2:
             st.markdown(f"""
             #### 🔴 VERKOOP {name2} (SHORT)
-            - **Aantal**: {shares_asset2:.6f} {name2}
-            - **Huidige Prijs**: {current_price2:.6f} USDT  
-            - **Totaal**: {cost_asset2:.5f} USDT
+            - **Aantal**: {shares_asset2:.0f} {name2}
+            - **Huidige Prijs**: {current_price2:.8f} USDT  
+            - **Totaal**: {cost_asset2:.2f} USDT
             - **Order Type**: MARKET SELL (SHORT)
             """)
         
-        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar")
+        # Check if this is a problematic pair for small accounts
+        smaller_position = min(cost_asset1, cost_asset2)
+        larger_position = max(cost_asset1, cost_asset2)
+        position_ratio = larger_position / smaller_position if smaller_position > 0 else float('inf')
+        
+        if position_ratio > 10:  # If one position is 10x larger than the other
+            st.warning(f"""
+            ⚠️ **ONGEBALANCEERDE POSITIE WAARSCHUWING**
+            
+            Deze hedge ratio ({beta:.6f}) zorgt voor zeer ongebalanceerde posities:
+            - **Grote positie**: {larger_position:.2f} USDT  
+            - **Kleine positie**: {smaller_position:.2f} USDT
+            - **Ratio**: {position_ratio:.1f}:1
+            
+            **Voor €{trading_capital} accounts wordt aanbevolen:**
+            1. **Kies andere paren** met betere balans (ratio < 5:1)
+            2. **Verhoog trading capital** tot minimaal €{int(larger_position * 4)} USDT
+            3. **Gebruik ETFs** in plaats van individuele coins
+            4. **Overweeg opties** voor betere capital efficiency
+            """)
+        elif smaller_position < 10:  # Position smaller than $10
+            st.warning(f"""
+            ⚠️ **TE KLEINE POSITIE WAARSCHUWING**
+            
+            Kleinste positie ({smaller_position:.2f} USDT) is te klein voor effectieve pairs trading.
+            
+            **Minimum aanbevelingen:**
+            - **Minimale positie grootte**: 25 USDT per leg
+            - **Trading capital verhogen** naar minimaal €{int(25 * 4)} USDT  
+            - **Lagere leverage** overwegen voor stabielere paren
+            """)
+        
+        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar | **Positie Balans**: {position_ratio:.1f}:1")
         
         # === PRICE ALERTS VOOR LONG SPREAD ===
         st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
@@ -532,11 +571,11 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             **Sluit LONG spread wanneer:**
             
             **Optie A - {name2} daalt naar:**
-            - **{name2} ≤ {profit_price2:.6f} USDT**
+            - **{name2} ≤ {profit_price2:.8f} USDT**
             - Z-score ≈ {exit_zscore_long:.1f}
             
             **Optie B - {name1} stijgt naar:**  
-            - **{name1} ≥ {profit_price1:.6f} USDT**
+            - **{name1} ≥ {profit_price1:.8f} USDT**
             - Z-score ≈ {exit_zscore_long:.1f}
             
             **🎯 Verwachte Winst: ~{((exit_spread_long - current_spread) / current_spread * 100):.1f}%**
@@ -548,11 +587,11 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             **EMERGENCY EXIT wanneer:**
             
             **Optie A - {name2} stijgt naar:**
-            - **{name2} ≥ {stoploss_price2:.6f} USDT**
+            - **{name2} ≥ {stoploss_price2:.8f} USDT**
             - Z-score ≈ {stoploss_zscore_long:.1f}
             
             **Optie B - {name1} daalt naar:**
-            - **{name1} ≤ {stoploss_price1:.6f} USDT**  
+            - **{name1} ≤ {stoploss_price1:.8f} USDT**  
             - Z-score ≈ {stoploss_zscore_long:.1f}
             
             **🛑 Max Verlies: -{max_risk_usdt:.2f} USDT**
@@ -564,12 +603,16 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         
         usable_capital = trading_capital * 0.98
         
-        # Short spread = Short Asset1, Long Asset2
-        capital_asset1 = usable_capital / (1 + beta)
-        capital_asset2 = capital_asset1 * beta
+        # IMPROVED Position sizing - Equal dollar amounts for better hedge  
+        capital_per_leg = usable_capital / 2
+        shares_asset1 = capital_per_leg / current_price1  
+        shares_asset2_raw = capital_per_leg / current_price2
         
-        shares_asset1 = capital_asset1 / current_price1  # Dit wordt SHORT
-        shares_asset2 = capital_asset2 / current_price2
+        # Apply hedge ratio to the SHORT position for proper correlation
+        shares_asset2 = shares_asset2_raw * beta
+        
+        cost_asset1 = shares_asset1 * current_price1
+        cost_asset2 = shares_asset2 * current_price2
         
         cost_asset1 = shares_asset1 * current_price1
         cost_asset2 = shares_asset2 * current_price2
@@ -581,8 +624,8 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         with col1:
             st.markdown(f"""
             #### 🔴 VERKOOP {name1} (SHORT)
-            - **Aantal**: {shares_asset1:.6f} {name1}
-            - **Huidige Prijs**: {current_price1:.6f} USDT
+            - **Aantal**: {shares_asset1:.4f} {name1}
+            - **Huidige Prijs**: {current_price1:.8f} USDT
             - **Totaal**: {cost_asset1:.2f} USDT
             - **Order Type**: MARKET SELL (SHORT)
             """)
@@ -590,13 +633,35 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         with col2:
             st.markdown(f"""
             #### 🟢 KOOP {name2}
-            - **Aantal**: {shares_asset2:.6f} {name2}
-            - **Huidige Prijs**: {current_price2:.6f} USDT
+            - **Aantal**: {shares_asset2:.0f} {name2}
+            - **Huidige Prijs**: {current_price2:.8f} USDT
             - **Totaal**: {cost_asset2:.2f} USDT
             - **Order Type**: MARKET BUY
             """)
         
-        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar")
+        # Check position balance for short spread too
+        smaller_position = min(cost_asset1, cost_asset2)
+        larger_position = max(cost_asset1, cost_asset2)
+        position_ratio = larger_position / smaller_position if smaller_position > 0 else float('inf')
+        
+        if position_ratio > 10:
+            st.warning(f"""
+            ⚠️ **ONGEBALANCEERDE POSITIE WAARSCHUWING**
+            
+            Deze hedge ratio ({beta:.6f}) zorgt voor zeer ongebalanceerde posities:
+            - **Grote positie**: {larger_position:.2f} USDT  
+            - **Kleine positie**: {smaller_position:.2f} USDT
+            - **Ratio**: {position_ratio:.1f}:1
+            
+            **Overweeg andere paren of groter trading capital.**
+            """)
+        elif smaller_position < 10:
+            st.warning(f"""
+            ⚠️ **TE KLEINE POSITIE**: {smaller_position:.2f} USDT is te klein.
+            **Verhoog capital** naar minimaal €{int(25 * 4)} USDT.
+            """)
+        
+        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar | **Positie Balans**: {position_ratio:.1f}:1")
         
         # === PRICE ALERTS VOOR SHORT SPREAD ===
         st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
@@ -740,32 +805,6 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
     - Maximaal {min(5, int(trading_capital / (max_risk_usdt * 10)))} trades tegelijk doet
     """)
     
-    # === MOBILE ALERTS SECTION ===
-    with st.expander("📱 TradingView/Exchange Mobile Alerts Setup", expanded=False):
-        st.markdown("""
-        ### 📱 Mobile Price Alerts Instellen:
-        
-        **TradingView Alerts:**
-        1. Open TradingView app
-        2. Ga naar de coin chart
-        3. Klik op Alert (bell icon)
-        4. Set "Price crosses above/below [target price]"
-        5. Enable push notifications
-        
-        **Binance Mobile Alerts:**
-        1. Open Binance app  
-        2. Ga naar Markets → [COIN]
-        3. Klik op Bell icon (top right)
-        4. Set "Price Alert" met target prijzen
-        5. Enable push notifications
-        
-        **Bybit Mobile Alerts:**
-        1. Open Bybit app
-        2. Trading → [PAIR] 
-        3. Alert icon → Create Alert
-        4. Set price levels
-        5. Enable notifications
-        """)
 # === REALISTIC PAIRS TRADING BACKTEST ===
 def run_realistic_pairs_backtest(df, entry_threshold, exit_threshold, initial_capital=100000, 
                                 transaction_cost=0.05, position_size_pct=20, 
