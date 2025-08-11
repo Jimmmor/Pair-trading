@@ -423,9 +423,9 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(f"{name1}", f"${current_price1:.4f}")
+        st.metric(f"{name1}", f"${current_price1:.8f}")
     with col2:
-        st.metric(f"{name2}", f"${current_price2:.4f}")
+        st.metric(f"{name2}", f"${current_price2:.8f}")
     with col3:
         color = "normal"
         if abs(current_zscore) >= zscore_entry_threshold:
