@@ -434,7 +434,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
                  delta=f"{'TRADE!' if abs(current_zscore) >= zscore_entry_threshold else 'Wacht'}", 
                  delta_color=color)
     with col4:
-        st.metric("Hedge Ratio", f"{beta:.3f}")
+        st.metric("Hedge Ratio", f"{beta:.9f}")
     
     # === TRADING DECISION ===
     st.markdown("---")
@@ -467,7 +467,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             st.markdown(f"""
             #### 🟢 KOOP {name1}
             - **Aandelen**: {shares_asset1:.4f}
-            - **Prijs**: ${current_price1:.4f}
+            - **Prijs**: ${current_price1:.9f}
             - **Kosten**: €{cost_asset1:.2f}
             - **Actie**: MARKET BUY ORDER
             """)
@@ -476,7 +476,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             st.markdown(f"""
             #### 🔴 VERKOOP {name2} 
             - **Aandelen**: {shares_asset2:.4f}
-            - **Prijs**: ${current_price2:.4f}  
+            - **Prijs**: ${current_price2:.9f}  
             - **Opbrengst**: €{cost_asset2:.2f}
             - **Actie**: MARKET SELL ORDER (SHORT)
             """)
@@ -507,7 +507,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             st.markdown(f"""
             #### 🔴 VERKOOP {name1}
             - **Aandelen**: {shares_asset1:.4f}
-            - **Prijs**: ${current_price1:.4f}
+            - **Prijs**: ${current_price1:.9f}
             - **Opbrengst**: €{cost_asset1:.2f}
             - **Actie**: MARKET SELL ORDER (SHORT)
             """)
@@ -516,7 +516,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             st.markdown(f"""
             #### 🟢 KOOP {name2}
             - **Aandelen**: {shares_asset2:.4f}
-            - **Prijs**: ${current_price2:.4f}
+            - **Prijs**: ${current_price2:.9f}
             - **Kosten**: €{cost_asset2:.2f}
             - **Actie**: MARKET BUY ORDER
             """)
@@ -563,12 +563,12 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         st.markdown(f"""
         **🎯 PROFIT TARGET:**
         - Z-score: -{zscore_exit_threshold:.1f} of hoger
-        - Spread: ${exit_spread_long:.4f} of hoger
+        - Spread: ${exit_spread_long:.9f} of hoger
         - **Actie**: Sluit beide posities (SELL {name1}, BUY BACK {name2})
         
         **🛑 STOP LOSS:**
         - Z-score: +{zscore_entry_threshold:.1f} of hoger (omkering!)
-        - Spread: ${stoploss_spread_long:.4f} of hoger
+        - Spread: ${stoploss_spread_long:.9f} of hoger
         - **Max Verlies**: €{max_risk_euro:.2f}
         - **Actie**: Emergency exit beide posities
         
@@ -582,12 +582,12 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         st.markdown(f"""
         **🎯 PROFIT TARGET:**
         - Z-score: +{zscore_exit_threshold:.1f} of lager  
-        - Spread: ${exit_spread_short:.4f} of lager
+        - Spread: ${exit_spread_short:.9f} of lager
         - **Actie**: Sluit beide posities (BUY BACK {name1}, SELL {name2})
         
         **🛑 STOP LOSS:**
         - Z-score: -{zscore_entry_threshold:.1f} of lager (omkering!)
-        - Spread: ${stoploss_spread_short:.4f} of lager
+        - Spread: ${stoploss_spread_short:.9f} of lager
         - **Max Verlies**: €{max_risk_euro:.2f}
         - **Actie**: Emergency exit beide posities
         
@@ -659,7 +659,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         1. **Capital**: €{trading_capital} beschikbaar
         2. **Risico**: Max €{max_risk_euro:.2f} verlies
         3. **Signaal**: {trade_type} (Z = {current_zscore:.2f})
-        4. **Hedge Ratio**: {beta:.3f}
+        4. **Hedge Ratio**: {beta:.9f}
         5. **Max Trade Tijd**: 30 dagen
         
         **VOLGENDE STAP**: Plaats de orders zoals hierboven beschreven
