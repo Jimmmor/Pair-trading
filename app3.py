@@ -378,16 +378,11 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             fig_scatter.update_traces(marker=dict(size=8, color='blue', opacity=0.6))
             st.plotly_chart(fig_scatter, use_container_width=True)
 
-# === TRADING SIGNALS SECTION - FIXED ===
-with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
-    st.header("Praktische Trade Uitvoering")
+# === IMPROVED PRACTICAL TRADING EXECUTION SECTION ===
+with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
+    st.header("🎯 Praktische Trade Uitvoering")
     
-    # Gebruik de al berekende Z-score waardes (consistent met statistiek sectie)
-    current_price1 = df['price1'].iloc[-1]
-    current_price2 = df['price2'].iloc[-1]
-    current_zscore = df['zscore'].iloc[-1]  # Deze is al berekend met consistente parameters
-    
-    # Gebruik de al berekende spread statistieken
+    # Consistent calculations with main analysis
     X = df['price1'].values.reshape(-1, 1)
     y = df['price2'].values
     model = LinearRegression()
@@ -396,261 +391,291 @@ with st.expander("Trading Signals - Praktische Uitvoering", expanded=True):
     alpha = model.intercept_
     beta = model.coef_[0]  # hedge ratio
     
-    # Gebruik de al berekende spread mean en std (consistent)
-    spread_mean = df['spread'].mean()  # Zelfde als in statistiek sectie
-    spread_std = df['spread'].std()    # Zelfde als in statistiek sectie
+    # Use consistent spread calculation
+    current_price1 = df['price1'].iloc[-1]
+    current_price2 = df['price2'].iloc[-1]
+    current_spread = df['spread'].iloc[-1]  # Already calculated consistently
+    current_zscore = df['zscore'].iloc[-1]  # Already calculated consistently
     
-    # Bereken fair value op basis van consistente parameters
-    current_spread = current_price2 - (alpha + beta * current_price1)
-    fair_value_spread = spread_mean  # Target spread
-    fair_value2 = current_price1 * beta + alpha + fair_value_spread
+    spread_mean = df['spread'].mean()
+    spread_std = df['spread'].std()
     
-    # Toon huidige marktsituatie
-    col1, col2, col3, col4 = st.columns(4)
+    # === CURRENT MARKET STATUS ===
+    st.subheader("📊 Huidige Marktsituatie")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric(f"{name1} Prijs", f"${current_price1:.4f}")
     with col2:
         st.metric(f"{name2} Prijs", f"${current_price2:.4f}")
     with col3:
-        st.metric("Current Z-score", f"{current_zscore:.2f}")
+        color = "normal"
+        if abs(current_zscore) >= zscore_entry_threshold:
+            color = "inverse"
+        st.metric("Z-Score", f"{current_zscore:.2f}", delta=f"{'Entry!' if abs(current_zscore) >= zscore_entry_threshold else 'Monitor'}", delta_color=color)
     with col4:
-        st.metric("Current Spread", f"${current_spread:.4f}")
+        st.metric("Hedge Ratio (β)", f"{beta:.3f}")
+    with col5:
+        st.metric("Correlation", f"{df['price1'].corr(df['price2']):.3f}")
     
-    # Trade execution parameters - consistent Z-score logic
-    if current_zscore < -zscore_entry_threshold:
-        st.success(f"**LONG SPREAD SIGNAL (Z = {current_zscore:.2f})**")
+    # === TRADING DECISION LOGIC ===
+    st.markdown("---")
+    
+    # Calculate trade sizes for practical examples
+    example_capital = st.number_input("💰 Voorbeeld Trading Capital ($)", 
+                                    min_value=1000, max_value=1000000, 
+                                    value=50000, step=1000,
+                                    help="Voer uw trading capital in voor realistische berekeningen")
+    
+    position_percentage = st.slider("📊 Positie Grootte (% van capital)", 
+                                   min_value=5.0, max_value=50.0, 
+                                   value=20.0, step=2.5,
+                                   help="Hoeveel procent van uw capital per trade")
+    
+    trade_capital = example_capital * (position_percentage / 100)
+    
+    # Determine current signal and calculate exact execution
+    if current_zscore <= -zscore_entry_threshold:
+        # LONG SPREAD SIGNAL
+        st.success(f"🟢 **LONG SPREAD SIGNAAL** (Z-Score: {current_zscore:.2f})")
+        
         st.markdown(f"""
-        ### 📈 Uitvoering LONG SPREAD:
-        1. **Koop {name1}** tegen huidige prijs: ${current_price1:.4f}
-        2. **Verkoop {beta:.4f} eenheden {name2}** per {name1} tegen: ${current_price2:.4f}
-        3. **Hedge Ratio**: 1 {name1} = {beta:.4f} {name2}
+        ### 📈 **UITVOERING LONG SPREAD TRADE**
         
-        ### 🎯 Trading Logic:
-        - **Huidige spread**: ${current_spread:.4f} (te laag)
-        - **Gemiddelde spread**: ${spread_mean:.4f} (target)
-        - **Verwacht herstel**: Spread stijgt naar gemiddelde
-        - **Exit bij Z-score**: -{zscore_exit_threshold:.1f} (spread normaliseert)
-        
-        ### 💡 Waarom deze trade?
-        Z-score van {current_zscore:.2f} betekent dat de spread {abs(current_zscore):.1f} standaarddeviaties onder het gemiddelde ligt.
-        Historisch keert dit terug naar het gemiddelde.
+        **🎯 Trading Logic:**
+        - Spread is {abs(current_zscore):.2f} standaarddeviaties ONDER het gemiddelde
+        - Verwachting: spread zal terug stijgen naar het gemiddelde
+        - **BUY** de spread = Long {name1} + Short {name2}
         """)
         
-    elif current_zscore > zscore_entry_threshold:
-        st.error(f"**SHORT SPREAD SIGNAL (Z = {current_zscore:.2f})**")
+        # Calculate exact position sizes
+        capital_per_leg = trade_capital / 2
+        
+        # Long position in asset 1
+        shares_asset1 = capital_per_leg / current_price1
+        notional_asset1 = shares_asset1 * current_price1
+        
+        # Short position in asset 2 (hedge ratio adjusted)
+        hedge_notional = notional_asset1 * beta
+        shares_asset2 = hedge_notional / current_price2
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🟢 LEG 1: LONG " + name1)
+            st.markdown(f"""
+            - **Actie**: BUY (Long)
+            - **Aantal aandelen**: {shares_asset1:,.2f}
+            - **Prijs per aandeel**: ${current_price1:.4f}
+            - **Totaal investering**: ${notional_asset1:,.2f}
+            """)
+            
+        with col2:
+            st.markdown("#### 🔴 LEG 2: SHORT " + name2)
+            st.markdown(f"""
+            - **Actie**: SELL (Short)
+            - **Aantal aandelen**: {shares_asset2:,.2f}
+            - **Prijs per aandeel**: ${current_price2:.4f}
+            - **Totaal notional**: ${hedge_notional:,.2f}
+            """)
+        
+        # Exit strategy
+        exit_zscore_target = -zscore_exit_threshold
+        target_spread = spread_mean + exit_zscore_target * spread_std
+        
         st.markdown(f"""
-        ### 📉 Uitvoering SHORT SPREAD:
-        1. **Verkoop {name1}** tegen huidige prijs: ${current_price1:.4f}
-        2. **Koop {beta:.4f} eenheden {name2}** per {name1} tegen: ${current_price2:.4f}
-        3. **Hedge Ratio**: 1 {name1} = {beta:.4f} {name2}
-        
-        ### 🎯 Trading Logic:
-        - **Huidige spread**: ${current_spread:.4f} (te hoog)
-        - **Gemiddelde spread**: ${spread_mean:.4f} (target)
-        - **Verwacht herstel**: Spread daalt naar gemiddelde
-        - **Exit bij Z-score**: {zscore_exit_threshold:.1f} (spread normaliseert)
-        
-        ### 💡 Waarom deze trade?
-        Z-score van {current_zscore:.2f} betekent dat de spread {current_zscore:.1f} standaarddeviaties boven het gemiddelde ligt.
-        Historisch keert dit terug naar het gemiddelde.
+        ### 🎯 **EXIT STRATEGIE**
+        - **Exit wanneer**: Z-score stijgt naar -{zscore_exit_threshold:.1f} of hoger
+        - **Target spread**: ${target_spread:.4f} (vs huidige ${current_spread:.4f})
+        - **Stop Loss**: Bij Z-score van +{zscore_entry_threshold:.1f} (spread keert volledig om)
         """)
+        
+    elif current_zscore >= zscore_entry_threshold:
+        # SHORT SPREAD SIGNAL
+        st.error(f"🔴 **SHORT SPREAD SIGNAAL** (Z-Score: {current_zscore:.2f})")
+        
+        st.markdown(f"""
+        ### 📉 **UITVOERING SHORT SPREAD TRADE**
+        
+        **🎯 Trading Logic:**
+        - Spread is {current_zscore:.2f} standaarddeviaties BOVEN het gemiddelde
+        - Verwachting: spread zal terug dalen naar het gemiddelde
+        - **SELL** de spread = Short {name1} + Long {name2}
+        """)
+        
+        # Calculate exact position sizes
+        capital_per_leg = trade_capital / 2
+        
+        # Short position in asset 1
+        shares_asset1 = capital_per_leg / current_price1
+        notional_asset1 = shares_asset1 * current_price1
+        
+        # Long position in asset 2 (hedge ratio adjusted)
+        hedge_notional = notional_asset1 * beta
+        shares_asset2 = hedge_notional / current_price2
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🔴 LEG 1: SHORT " + name1)
+            st.markdown(f"""
+            - **Actie**: SELL (Short)
+            - **Aantal aandelen**: {shares_asset1:,.2f}
+            - **Prijs per aandeel**: ${current_price1:.4f}
+            - **Totaal notional**: ${notional_asset1:,.2f}
+            """)
+            
+        with col2:
+            st.markdown("#### 🟢 LEG 2: LONG " + name2)
+            st.markdown(f"""
+            - **Actie**: BUY (Long)
+            - **Aantal aandelen**: {shares_asset2:,.2f}
+            - **Prijs per aandeel**: ${current_price2:.4f}
+            - **Totaal investering**: ${hedge_notional:,.2f}
+            """)
+        
+        # Exit strategy
+        exit_zscore_target = zscore_exit_threshold
+        target_spread = spread_mean + exit_zscore_target * spread_std
+        
+        st.markdown(f"""
+        ### 🎯 **EXIT STRATEGIE**
+        - **Exit wanneer**: Z-score daalt naar +{zscore_exit_threshold:.1f} of lager
+        - **Target spread**: ${target_spread:.4f} (vs huidige ${current_spread:.4f})
+        - **Stop Loss**: Bij Z-score van -{zscore_entry_threshold:.1f} (spread keert volledig om)
+        """)
+        
     else:
-        st.info(f"**GEEN SIGNAL (Z = {current_zscore:.2f})**")
+        # NO SIGNAL
+        st.info(f"⏳ **GEEN SIGNAAL** - WACHT (Z-Score: {current_zscore:.2f})")
         
-        # Toon afstand tot entry levels
+        # Show distance to signals
         distance_to_long = abs(current_zscore - (-zscore_entry_threshold))
         distance_to_short = abs(current_zscore - zscore_entry_threshold)
         
-        st.markdown(f"""
-        ### ⏳ Wacht op entry signaal:
-        - **LONG entry** bij Z < -{zscore_entry_threshold:.1f} (nog {distance_to_long:.2f} punten)
-        - **SHORT entry** bij Z > {zscore_entry_threshold:.1f} (nog {distance_to_short:.2f} punten)
+        next_signal = "LONG" if distance_to_long < distance_to_short else "SHORT"
+        next_distance = min(distance_to_long, distance_to_short)
         
-        ### 📊 Huidige status:
-        - Spread is {abs(current_zscore):.1f} standaarddeviaties van gemiddelde
-        - {"Boven" if current_zscore > 0 else "Onder"} gemiddelde spread
+        st.markdown(f"""
+        ### ⌛ **WACHT OP SIGNAAL**
+        
+        **Huidige Status:**
+        - Z-score: {current_zscore:.2f} (binnen neutrale zone ±{zscore_entry_threshold:.1f})
+        - Spread is {abs(current_zscore):.2f} standaarddeviaties van gemiddelde
+        - **Dichtstbijzijnde signaal**: {next_signal} (nog {next_distance:.2f} Z-score punten)
+        
+        **Entry Levels:**
+        - 🟢 **LONG SPREAD** bij Z-score ≤ -{zscore_entry_threshold:.1f}
+        - 🔴 **SHORT SPREAD** bij Z-score ≥ +{zscore_entry_threshold:.1f}
+        """)
+        
+        # Calculate what prices would trigger signals
+        long_entry_spread = spread_mean - zscore_entry_threshold * spread_std
+        short_entry_spread = spread_mean + zscore_entry_threshold * spread_std
+        
+        st.markdown(f"""
+        **In Spread termen:**
+        - LONG entry bij spread ≤ ${long_entry_spread:.4f}
+        - SHORT entry bij spread ≥ ${short_entry_spread:.4f}
+        - Huidige spread: ${current_spread:.4f}
         """)
     
-    # Toon praktische trading levels - consistent met hoofdberekening
+    # === RISK MANAGEMENT SECTION ===
     st.markdown("---")
-    st.subheader("Trading Parameters (Consistent)")
-    
-    # Bereken entry/exit levels in werkelijke prijzen
-    long_entry_spread = spread_mean - zscore_entry_threshold * spread_std
-    long_exit_spread = spread_mean - zscore_exit_threshold * spread_std
-    short_entry_spread = spread_mean + zscore_entry_threshold * spread_std
-    short_exit_spread = spread_mean + zscore_exit_threshold * spread_std
+    st.subheader("⚠️ Risk Management")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        entry_levels = pd.DataFrame({
-            'Parameter': [
-                'Alpha (α)',
-                'Beta/Hedge Ratio (β)', 
-                'Spread Mean',
-                'Spread Std Dev',
-                'Current Spread',
-                'Current Z-score'
-            ],
-            'Waarde': [
-                f"{alpha:.6f}",
-                f"{beta:.4f}",
-                f"${spread_mean:.4f}",
-                f"${spread_std:.4f}",
-                f"${current_spread:.4f}",
-                f"{current_zscore:.2f}"
-            ]
-        })
-        st.table(entry_levels)
+        st.markdown("""
+        #### 🛡️ **Stop Loss Rules**
+        - **Z-score omkering**: Exit als Z-score volledig omkeert
+        - **Time decay**: Max 30 dagen per trade
+        - **Correlatie breakdown**: Exit als correlatie < 0.6
+        - **Max verlies**: Stop bij -5% van trade capital
+        """)
     
     with col2:
-        trading_levels = pd.DataFrame({
-            'Level': [
-                'Long Entry Spread',
-                'Long Exit Spread', 
-                'Short Entry Spread',
-                'Short Exit Spread'
-            ],
-            'Z-score': [
-                f"-{zscore_entry_threshold:.1f}",
-                f"-{zscore_exit_threshold:.1f}",
-                f"+{zscore_entry_threshold:.1f}",
-                f"+{zscore_exit_threshold:.1f}"
-            ],
-            'Spread Value': [
-                f"${long_entry_spread:.4f}",
-                f"${long_exit_spread:.4f}",
-                f"${short_entry_spread:.4f}",
-                f"${short_exit_spread:.4f}"
-            ]
-        })
-        st.table(trading_levels)
-    
-    # FIXED: Gebruik de al berekende Z-score (consistent met statistiek sectie)
-    st.subheader("Z-score Trading Chart (Consistent)")
-    
-    fig = go.Figure()
-    
-    # Z-score lijn (gebruik al berekende waardes)
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df['zscore'],  # Deze is al correct berekend in het begin
-        name='Z-score',
-        line=dict(color='blue', width=2),
-        hovertemplate='<b>Date</b>: %{x}<br><b>Z-score</b>: %{y:.2f}<extra></extra>'
-    ))
-    
-    # Mean lijn (bij z-score = 0)
-    fig.add_hline(
-        y=0,
-        line=dict(color='black', width=1),
-        annotation_text="Mean (Z=0)",
-        annotation_position="top right"
-    )
-    
-    # Entry levels
-    fig.add_hline(
-        y=zscore_entry_threshold,
-        line=dict(color='red', dash='dash', width=2),
-        annotation_text=f"SHORT Entry (Z=+{zscore_entry_threshold})",
-        annotation_position="top right"
-    )
-    
-    fig.add_hline(
-        y=-zscore_entry_threshold,
-        line=dict(color='green', dash='dash', width=2),
-        annotation_text=f"LONG Entry (Z=-{zscore_entry_threshold})",
-        annotation_position="bottom right"
-    )
-    
-    # Exit levels
-    fig.add_hline(
-        y=zscore_exit_threshold,
-        line=dict(color='pink', dash='dot', width=1),
-        annotation_text=f"SHORT Exit (Z=+{zscore_exit_threshold})",
-        annotation_position="top left"
-    )
-    
-    fig.add_hline(
-        y=-zscore_exit_threshold,
-        line=dict(color='lightgreen', dash='dot', width=1),
-        annotation_text=f"LONG Exit (Z=-{zscore_exit_threshold})",
-        annotation_position="bottom left"
-    )
-    
-    # Markeer huidige positie
-    fig.add_trace(go.Scatter(
-        x=[df.index[-1]],
-        y=[current_zscore],
-        mode='markers',
-        marker=dict(
-            size=15,
-            color='yellow',
-            symbol='star',
-            line=dict(color='black', width=2)
-        ),
-        name=f'Current (Z={current_zscore:.2f})',
-        hovertemplate=f'<b>Current Position</b><br>Z-score: {current_zscore:.2f}<extra></extra>'
-    ))
-    
-    # Kleur de trading zones
-    fig.add_hrect(
-        y0=zscore_entry_threshold, y1=5,
-        fillcolor="rgba(255,0,0,0.1)",
-        layer="below", line_width=0,
-        annotation_text="SHORT Zone", 
-        annotation_position="top left"
-    )
-    
-    fig.add_hrect(
-        y0=-5, y1=-zscore_entry_threshold,
-        fillcolor="rgba(0,255,0,0.1)",
-        layer="below", line_width=0,
-        annotation_text="LONG Zone", 
-        annotation_position="bottom left"
-    )
-    
-    # Neutrale zone
-    fig.add_hrect(
-        y0=-zscore_entry_threshold, y1=zscore_entry_threshold,
-        fillcolor="rgba(128,128,128,0.05)",
-        layer="below", line_width=0
-    )
-    
-    fig.update_layout(
-        title=f"Z-score Trading Levels - {name1} vs {name2} (Consistent Calculation)",
-        xaxis_title="Date",
-        yaxis_title="Z-score",
-        height=500,
-        showlegend=True,
-        hovermode='x unified',
-        template='plotly_white'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Voeg een validatie toe
-    st.markdown("---")
-    with st.expander("🔍 Calculation Validation", expanded=False):
         st.markdown("""
-        **Validation Check**: Deze Z-scores zijn nu consistent met de Statistical Analysis sectie.
-        
-        **Berekening**:
-        1. Spread = Price2 - (α + β × Price1)  
-        2. Z-score = (Spread - Mean(Spread)) / Std(Spread)
-        3. Gebruik dezelfde parameters door hele app
-        
-        **Key Parameters**:
+        #### 🎯 **Profit Taking**
+        - **Primaire exit**: Z-score normaliseert (mean reversion)
+        - **Profit target**: +8% van trade capital  
+        - **Gedeeltelijke exit**: 50% bij +4%, rest laten lopen
+        - **Trailing stop**: Na +6% profit
         """)
+    
+    # === EXECUTION CHECKLIST ===
+    st.markdown("---")
+    st.subheader("✅ Pre-Trade Checklist")
+    
+    # Calculate real-time risk metrics
+    recent_corr = df['price1'].tail(20).corr(df['price2'].tail(20))
+    volatility_1 = df['price1'].pct_change().tail(20).std() * np.sqrt(252) * 100
+    volatility_2 = df['price2'].pct_change().tail(20).std() * np.sqrt(252) * 100
+    
+    checklist_items = [
+        {"item": "Correlatie Check", "status": recent_corr > 0.6, "value": f"{recent_corr:.3f}", "threshold": "> 0.6"},
+        {"item": "Z-Score Significantie", "status": abs(current_zscore) >= zscore_entry_threshold, "value": f"{abs(current_zscore):.2f}", "threshold": f"≥ {zscore_entry_threshold}"},
+        {"item": "Volatiliteit " + name1, "status": volatility_1 < 50, "value": f"{volatility_1:.1f}%", "threshold": "< 50%"},
+        {"item": "Volatiliteit " + name2, "status": volatility_2 < 50, "value": f"{volatility_2:.1f}%", "threshold": "< 50%"},
+        {"item": "Spread Stabiliteit", "status": spread_std > 0.001, "value": f"{spread_std:.4f}", "threshold": "> 0.001"},
+    ]
+    
+    for item in checklist_items:
+        status_icon = "✅" if item["status"] else "❌"
+        status_color = "green" if item["status"] else "red"
         
-        validation_df = pd.DataFrame({
-            'Parameter': ['Alpha (α)', 'Beta (β)', 'Spread Mean', 'Spread Std', 'Current Spread', 'Current Z-score'],
-            'Value': [f"{alpha:.6f}", f"{beta:.4f}", f"{spread_mean:.6f}", f"{spread_std:.6f}", f"{current_spread:.6f}", f"{current_zscore:.4f}"],
-            'Used In': ['Spread calc', 'Spread calc', 'Z-score calc', 'Z-score calc', 'Display', 'Trading logic']
-        })
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        with col1:
+            st.markdown(f"**{item['item']}**")
+        with col2:
+            st.markdown(f"**{item['value']}**")
+        with col3:
+            st.markdown(f"Threshold: {item['threshold']}")
+        with col4:
+            st.markdown(f"<span style='color: {status_color}; font-size: 20px;'>{status_icon}</span>", unsafe_allow_html=True)
+    
+    # Overall trade readiness
+    ready_count = sum(item["status"] for item in checklist_items)
+    trade_ready = ready_count >= 4
+    
+    if trade_ready and abs(current_zscore) >= zscore_entry_threshold:
+        st.success(f"🚀 **TRADE READY** ({ready_count}/5 checks passed)")
+    elif abs(current_zscore) >= zscore_entry_threshold:
+        st.warning(f"⚠️ **SIGNAAL AANWEZIG maar risico's** ({ready_count}/5 checks passed)")
+    else:
+        st.info(f"⏳ **WACHT OP SIGNAAL** ({ready_count}/5 checks passed)")
+    
+    # === PRACTICAL EXECUTION NOTES ===
+    st.markdown("---")
+    st.subheader("📝 Praktische Uitvoering Tips")
+    
+    with st.expander("🔧 Execution Details", expanded=False):
+        st.markdown(f"""
+        ### **Broker Requirements**
+        - **Short selling**: Beide assets moeten shortbaar zijn
+        - **Margin**: Minimaal 50% margin voor short posities
+        - **Hedge ratio**: Altijd {beta:.3f} ratio aanhouden tussen assets
         
-        st.dataframe(validation_df, use_container_width=True)
+        ### **Order Types**  
+        - **Market orders**: Voor snelle entry bij sterke signalen
+        - **Limit orders**: Bij langzame mean reversion
+        - **Stop orders**: Voor risk management exits
+        
+        ### **Timing**
+        - **Best execution**: Tijdens market hours, hoge liquiditeit
+        - **Avoid**: Earnings announcements, Fed meetings
+        - **Monitor**: Na entry, dagelijks Z-score checken
+        
+        ### **Portfolio Impact**
+        - **Correlatie**: Max 30% van portfolio in pairs trades
+        - **Sector exposure**: Diversifieer over sectoren
+        - **Rebalancing**: Weekly review van hedge ratios
+        """)
+    
+    # Current hedge ratio validation
+    if abs(beta - 1.0) > 0.5:
+        st.warning(f"⚠️ **Hedge Ratio Warning**: β = {beta:.3f} betekent ongelijke position sizes. Voor elke ${notional_asset1:,.0f} in {name1}, heb je ${notional_asset1 * beta:,.0f} in {name2} nodig.")
 # === REALISTIC PAIRS TRADING BACKTEST ===
 def run_realistic_pairs_backtest(df, entry_threshold, exit_threshold, initial_capital=100000, 
                                 transaction_cost=0.05, position_size_pct=20, 
