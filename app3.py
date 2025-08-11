@@ -379,8 +379,8 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             st.plotly_chart(fig_scatter, use_container_width=True)
 
 # === IMPROVED PRACTICAL TRADING EXECUTION SECTION ===
-with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
-    st.header("🎯 Praktische Trade Uitvoering")
+with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True):
+    st.header("🎯 Praktische Trade Uitvoering - USDT Coin Paren")
     
     # Consistent calculations with main analysis
     X = df['price1'].values.reshape(-1, 1)
@@ -391,9 +391,9 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
     alpha = model.intercept_
     beta = model.coef_[0]  # hedge ratio
     
-    # Use consistent spread calculation
-    current_price1 = df['price1'].iloc[-1]
-    current_price2 = df['price2'].iloc[-1]
+    # Current market data
+    current_price1 = df['price1'].iloc[-1]  # Current price Asset 1
+    current_price2 = df['price2'].iloc[-1]  # Current price Asset 2
     current_spread = df['spread'].iloc[-1]  # Already calculated consistently
     current_zscore = df['zscore'].iloc[-1]  # Already calculated consistently
     
@@ -405,27 +405,27 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        trading_capital = st.number_input("💵 Trading Budget (€)", 
+        trading_capital = st.number_input("💵 Trading Budget (USDT)", 
                                         min_value=50, max_value=100000, 
-                                        value=100, step=25,
-                                        help="Minimum €50 voor pairs trading")
+                                        value=1000, step=25,
+                                        help="Minimum 50 USDT voor pairs trading")
     with col2:
         risk_per_trade = st.slider("🎯 Risico per Trade (%)", 
                                  min_value=1.0, max_value=10.0, 
-                                 value=3.0, step=0.5,
+                                 value=2.0, step=0.5,
                                  help="Maximaal verlies dat je accepteert")
     with col3:
-        max_risk_euro = trading_capital * (risk_per_trade / 100)
-        st.metric("Max Verlies per Trade", f"€{max_risk_euro:.2f}")
+        max_risk_usdt = trading_capital * (risk_per_trade / 100)
+        st.metric("Max Verlies per Trade", f"{max_risk_usdt:.2f} USDT")
     
     # === CURRENT MARKET STATUS ===
     st.subheader("📊 Huidige Marktsituatie")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(f"{name1}", f"${current_price1:.8f}")
+        st.metric(f"{name1}", f"{current_price1:.6f} USDT")
     with col2:
-        st.metric(f"{name2}", f"${current_price2:.8f}")
+        st.metric(f"{name2}", f"{current_price2:.6f} USDT")
     with col3:
         color = "normal"
         if abs(current_zscore) >= zscore_entry_threshold:
@@ -434,94 +434,210 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
                  delta=f"{'TRADE!' if abs(current_zscore) >= zscore_entry_threshold else 'Wacht'}", 
                  delta_color=color)
     with col4:
-        st.metric("Hedge Ratio", f"{beta:.9f}")
+        st.metric("Hedge Ratio", f"{beta:.6f}")
+    
+    # === PRICE LEVEL CALCULATIONS ===
+    
+    # Calculate exact price levels for exits based on Z-score targets
+    exit_zscore_long = -zscore_exit_threshold
+    exit_zscore_short = zscore_exit_threshold
+    stoploss_zscore_long = zscore_entry_threshold * 1.5  # More aggressive stop
+    stoploss_zscore_short = -zscore_entry_threshold * 1.5
+    
+    # Convert Z-scores back to spread levels
+    exit_spread_long = spread_mean + exit_zscore_long * spread_std
+    exit_spread_short = spread_mean + exit_zscore_short * spread_std
+    stoploss_spread_long = spread_mean + stoploss_zscore_long * spread_std
+    stoploss_spread_short = spread_mean + stoploss_zscore_short * spread_std
+    
+    def calculate_price_levels_for_spread(target_spread, current_price1, hedge_ratio):
+        """
+        Bereken wat de individuele asset prijzen moeten zijn voor een target spread
+        Spread = Price2 - (alpha + beta * Price1)
+        Dus: target_spread = Price2 - (alpha + beta * Price1)
+        Price2 = target_spread + alpha + beta * Price1
+        
+        We nemen Price1 als gegeven en berekenen Price2, of omgekeerd
+        """
+        
+        # Scenario 1: Price1 blijft, Price2 beweegt
+        target_price2_scenario1 = target_spread + alpha + beta * current_price1
+        
+        # Scenario 2: Price2 blijft, Price1 beweegt  
+        # target_spread = current_price2 - (alpha + beta * target_price1)
+        # beta * target_price1 = current_price2 - alpha - target_spread
+        target_price1_scenario2 = (current_price2 - alpha - target_spread) / beta if beta != 0 else current_price1
+        
+        return target_price2_scenario1, target_price1_scenario2
     
     # === TRADING DECISION ===
     st.markdown("---")
     
-    # Determine signal and show execution
+    # Determine signal and show execution with PRICE LEVELS
     if current_zscore <= -zscore_entry_threshold:
         # LONG SPREAD SIGNAL
         st.success(f"🟢 **KOOP SIGNAAL** - Z-Score: {current_zscore:.2f}")
         
         # Calculate exact positions for the trading capital
-        usable_capital = trading_capital * 0.95  # 5% buffer for costs
+        usable_capital = trading_capital * 0.98  # 2% buffer for fees
         
-        # For LONG spread: Buy Asset1, Sell Asset2
-        # Split capital 50/50 but adjust for hedge ratio
-        capital_asset1 = usable_capital / (1 + beta)  # Adjusted for hedge ratio
+        # Position sizing with proper hedge ratio
+        # Long spread = Long Asset1, Short Asset2
+        capital_asset1 = usable_capital / (1 + beta)
         capital_asset2 = capital_asset1 * beta
         
         shares_asset1 = capital_asset1 / current_price1
-        shares_asset2 = capital_asset2 / current_price2
+        shares_asset2 = capital_asset2 / current_price2  # Dit wordt SHORT
         
-        # Calculate exact costs
+        # Calculate costs
         cost_asset1 = shares_asset1 * current_price1
         cost_asset2 = shares_asset2 * current_price2
         total_cost = cost_asset1 + cost_asset2
         
-        st.markdown("### 📈 UITVOERING:")
+        st.markdown("### 📈 EXACTE TRADE UITVOERING:")
         
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
             #### 🟢 KOOP {name1}
-            - **Aandelen**: {shares_asset1:.4f}
-            - **Prijs**: ${current_price1:.9f}
-            - **Kosten**: €{cost_asset1:.2f}
-            - **Actie**: MARKET BUY ORDER
+            - **Aantal**: {shares_asset1:.6f} {name1}
+            - **Huidige Prijs**: {current_price1:.6f} USDT
+            - **Totaal**: {cost_asset1:.2f} USDT
+            - **Order Type**: MARKET BUY
             """)
             
         with col2:
             st.markdown(f"""
-            #### 🔴 VERKOOP {name2} 
-            - **Aandelen**: {shares_asset2:.4f}
-            - **Prijs**: ${current_price2:.9f}  
-            - **Opbrengst**: €{cost_asset2:.2f}
-            - **Actie**: MARKET SELL ORDER (SHORT)
+            #### 🔴 VERKOOP {name2} (SHORT)
+            - **Aantal**: {shares_asset2:.6f} {name2}
+            - **Huidige Prijs**: {current_price2:.6f} USDT  
+            - **Totaal**: {cost_asset2:.2f} USDT
+            - **Order Type**: MARKET SELL (SHORT)
             """)
         
-        st.info(f"**Totaal Kapitaal Gebruikt**: €{total_cost:.2f} van €{trading_capital:.2f}")
+        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar")
+        
+        # === PRICE ALERTS VOOR LONG SPREAD ===
+        st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
+        
+        # Calculate exact exit prices
+        profit_price2, profit_price1 = calculate_price_levels_for_spread(exit_spread_long, current_price1, beta)
+        stoploss_price2, stoploss_price1 = calculate_price_levels_for_spread(stoploss_spread_long, current_price1, beta)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.success("#### 🎯 PROFIT TARGET ALERTS")
+            st.markdown(f"""
+            **Sluit LONG spread wanneer:**
+            
+            **Optie A - {name2} daalt naar:**
+            - **{name2} ≤ {profit_price2:.6f} USDT**
+            - Z-score ≈ {exit_zscore_long:.1f}
+            
+            **Optie B - {name1} stijgt naar:**  
+            - **{name1} ≥ {profit_price1:.6f} USDT**
+            - Z-score ≈ {exit_zscore_long:.1f}
+            
+            **🎯 Verwachte Winst: ~{((exit_spread_long - current_spread) / current_spread * 100):.1f}%**
+            """)
+            
+        with col2:
+            st.error("#### 🛑 STOP LOSS ALERTS")  
+            st.markdown(f"""
+            **EMERGENCY EXIT wanneer:**
+            
+            **Optie A - {name2} stijgt naar:**
+            - **{name2} ≥ {stoploss_price2:.6f} USDT**
+            - Z-score ≈ {stoploss_zscore_long:.1f}
+            
+            **Optie B - {name1} daalt naar:**
+            - **{name1} ≤ {stoploss_price1:.6f} USDT**  
+            - Z-score ≈ {stoploss_zscore_long:.1f}
+            
+            **🛑 Max Verlies: -{max_risk_usdt:.2f} USDT**
+            """)
         
     elif current_zscore >= zscore_entry_threshold:
         # SHORT SPREAD SIGNAL  
         st.error(f"🔴 **VERKOOP SIGNAAL** - Z-Score: {current_zscore:.2f}")
         
-        usable_capital = trading_capital * 0.95
+        usable_capital = trading_capital * 0.98
         
-        # For SHORT spread: Sell Asset1, Buy Asset2
+        # Short spread = Short Asset1, Long Asset2
         capital_asset1 = usable_capital / (1 + beta)
         capital_asset2 = capital_asset1 * beta
         
-        shares_asset1 = capital_asset1 / current_price1
+        shares_asset1 = capital_asset1 / current_price1  # Dit wordt SHORT
         shares_asset2 = capital_asset2 / current_price2
         
         cost_asset1 = shares_asset1 * current_price1
         cost_asset2 = shares_asset2 * current_price2
         total_cost = cost_asset1 + cost_asset2
         
-        st.markdown("### 📉 UITVOERING:")
+        st.markdown("### 📉 EXACTE TRADE UITVOERING:")
         
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
-            #### 🔴 VERKOOP {name1}
-            - **Aandelen**: {shares_asset1:.4f}
-            - **Prijs**: ${current_price1:.9f}
-            - **Opbrengst**: €{cost_asset1:.2f}
-            - **Actie**: MARKET SELL ORDER (SHORT)
+            #### 🔴 VERKOOP {name1} (SHORT)
+            - **Aantal**: {shares_asset1:.6f} {name1}
+            - **Huidige Prijs**: {current_price1:.6f} USDT
+            - **Totaal**: {cost_asset1:.2f} USDT
+            - **Order Type**: MARKET SELL (SHORT)
             """)
             
         with col2:
             st.markdown(f"""
             #### 🟢 KOOP {name2}
-            - **Aandelen**: {shares_asset2:.4f}
-            - **Prijs**: ${current_price2:.9f}
-            - **Kosten**: €{cost_asset2:.2f}
-            - **Actie**: MARKET BUY ORDER
+            - **Aantal**: {shares_asset2:.6f} {name2}
+            - **Huidige Prijs**: {current_price2:.6f} USDT
+            - **Totaal**: {cost_asset2:.2f} USDT
+            - **Order Type**: MARKET BUY
             """)
         
-        st.info(f"**Totaal Kapitaal Gebruikt**: €{total_cost:.2f} van €{trading_capital:.2f}")
+        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT beschikbaar")
+        
+        # === PRICE ALERTS VOOR SHORT SPREAD ===
+        st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
+        
+        # Calculate exact exit prices for short spread
+        profit_price2_short, profit_price1_short = calculate_price_levels_for_spread(exit_spread_short, current_price1, beta)
+        stoploss_price2_short, stoploss_price1_short = calculate_price_levels_for_spread(stoploss_spread_short, current_price1, beta)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.success("#### 🎯 PROFIT TARGET ALERTS")
+            st.markdown(f"""
+            **Sluit SHORT spread wanneer:**
+            
+            **Optie A - {name2} stijgt naar:**
+            - **{name2} ≥ {profit_price2_short:.6f} USDT**
+            - Z-score ≈ {exit_zscore_short:.1f}
+            
+            **Optie B - {name1} daalt naar:**
+            - **{name1} ≤ {profit_price1_short:.6f} USDT**
+            - Z-score ≈ {exit_zscore_short:.1f}
+            
+            **🎯 Verwachte Winst: ~{((current_spread - exit_spread_short) / current_spread * 100):.1f}%**
+            """)
+            
+        with col2:
+            st.error("#### 🛑 STOP LOSS ALERTS")
+            st.markdown(f"""
+            **EMERGENCY EXIT wanneer:**
+            
+            **Optie A - {name2} daalt naar:**
+            - **{name2} ≤ {stoploss_price2_short:.6f} USDT**
+            - Z-score ≈ {stoploss_zscore_short:.1f}
+            
+            **Optie B - {name1} stijgt naar:**
+            - **{name1} ≥ {stoploss_price1_short:.6f} USDT**
+            - Z-score ≈ {stoploss_zscore_short:.1f}
+            
+            **🛑 Max Verlies: -{max_risk_usdt:.2f} USDT**
+            """)
         
     else:
         # NO SIGNAL
@@ -530,197 +646,125 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         distance_to_long = abs(current_zscore - (-zscore_entry_threshold))
         distance_to_short = abs(current_zscore - zscore_entry_threshold)
         
+        # Calculate what prices would trigger signals
+        long_entry_spread = spread_mean + (-zscore_entry_threshold) * spread_std
+        short_entry_spread = spread_mean + zscore_entry_threshold * spread_std
+        
+        long_trigger_price2, long_trigger_price1 = calculate_price_levels_for_spread(long_entry_spread, current_price1, beta)
+        short_trigger_price2, short_trigger_price1 = calculate_price_levels_for_spread(short_entry_spread, current_price1, beta)
+        
         st.markdown(f"""
-        ### ⌛ WACHT OP SIGNAAL
+        ### ⌛ PRICE ALERTS OM SIGNALEN TE VANGEN
         
-        **Entry Levels:**
-        - 🟢 KOOP bij Z-score ≤ -{zscore_entry_threshold:.1f} (nog {distance_to_long:.2f} punten)
-        - 🔴 VERKOOP bij Z-score ≥ +{zscore_entry_threshold:.1f} (nog {distance_to_short:.2f} punten)
+        **🟢 LONG SPREAD SIGNAAL bij:**
+        - {name1} blijft ~{current_price1:.6f} EN {name2} ≤ {long_trigger_price2:.6f} USDT
+        - OF {name2} blijft ~{current_price2:.6f} EN {name1} ≥ {long_trigger_price1:.6f} USDT
+        - **Z-score target**: ≤ -{zscore_entry_threshold:.1f}
         
-        **Huidige Status**: Neutrale zone, geen trading actie
+        **🔴 SHORT SPREAD SIGNAAL bij:**
+        - {name1} blijft ~{current_price1:.6f} EN {name2} ≥ {short_trigger_price2:.6f} USDT  
+        - OF {name2} blijft ~{current_price2:.6f} EN {name1} ≤ {short_trigger_price1:.6f} USDT
+        - **Z-score target**: ≥ +{zscore_entry_threshold:.1f}
+        
+        **Huidige Status**: Neutrale zone, monitor prijsbeweging
         """)
 
-    # === EXIT STRATEGY PER PAIR ===
+    # === EXCHANGE SPECIFIC INSTRUCTIONS ===
     st.markdown("---")
-    st.subheader(f"🎯 EXIT STRATEGIE voor {name1} vs {name2}")
+    st.subheader("🏪 Exchange Uitvoering (Binance/Bybit/etc)")
     
-    # Calculate specific exit levels for this pair
-    exit_zscore_long = -zscore_exit_threshold
-    exit_zscore_short = zscore_exit_threshold
-    stoploss_zscore_long = zscore_entry_threshold  # Reversal
-    stoploss_zscore_short = -zscore_entry_threshold  # Reversal
-    
-    # Convert to actual price levels
-    exit_spread_long = spread_mean + exit_zscore_long * spread_std
-    exit_spread_short = spread_mean + exit_zscore_short * spread_std
-    stoploss_spread_long = spread_mean + stoploss_zscore_long * spread_std
-    stoploss_spread_short = spread_mean + stoploss_zscore_short * spread_std
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🟢 LONG SPREAD EXITS")
-        st.markdown(f"""
-        **🎯 PROFIT TARGET:**
-        - Z-score: -{zscore_exit_threshold:.1f} of hoger
-        - Spread: ${exit_spread_long:.9f} of hoger
-        - **Actie**: Sluit beide posities (SELL {name1}, BUY BACK {name2})
+    with st.expander("📱 Stap-voor-stap Exchange Orders", expanded=False):
         
-        **🛑 STOP LOSS:**
-        - Z-score: +{zscore_entry_threshold:.1f} of hoger (omkering!)
-        - Spread: ${stoploss_spread_long:.9f} of hoger
-        - **Max Verlies**: €{max_risk_euro:.2f}
-        - **Actie**: Emergency exit beide posities
-        
-        **⏰ TIME STOP:**
-        - **Maximum**: 30 dagen in trade
-        - **Reden**: Vermijd decay van mean reversion
-        """)
-    
-    with col2:
-        st.markdown("#### 🔴 SHORT SPREAD EXITS")
-        st.markdown(f"""
-        **🎯 PROFIT TARGET:**
-        - Z-score: +{zscore_exit_threshold:.1f} of lager  
-        - Spread: ${exit_spread_short:.9f} of lager
-        - **Actie**: Sluit beide posities (BUY BACK {name1}, SELL {name2})
-        
-        **🛑 STOP LOSS:**
-        - Z-score: -{zscore_entry_threshold:.1f} of lager (omkering!)
-        - Spread: ${stoploss_spread_short:.9f} of lager
-        - **Max Verlies**: €{max_risk_euro:.2f}
-        - **Actie**: Emergency exit beide posities
-        
-        **⏰ TIME STOP:**
-        - **Maximum**: 30 dagen in trade
-        - **Reden**: Vermijd decay van mean reversion
-        """)
-    
-    # === RISK MANAGEMENT CHECKLIST ===
-    st.markdown("---")
-    st.subheader("⚠️ Risk Management Checklist")
-    
-    # Real-time risk metrics
-    recent_corr = df['price1'].tail(10).corr(df['price2'].tail(10))
-    volatility_spread = df['spread'].pct_change().tail(20).std() * 100
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("#### 🔍 PRE-TRADE CHECKS")
-        checks = [
-            ("Correlatie", recent_corr > 0.6, f"{recent_corr:.2f}"),
-            ("Z-Score", abs(current_zscore) >= zscore_entry_threshold, f"{abs(current_zscore):.2f}"),
-            ("Capital", trading_capital >= 50, f"€{trading_capital}"),
-            ("Spread Volatility", volatility_spread < 10, f"{volatility_spread:.1f}%")
-        ]
-        
-        for check, passed, value in checks:
-            icon = "✅" if passed else "❌"
-            st.markdown(f"{icon} **{check}**: {value}")
-    
-    with col2:
-        st.markdown("#### 📊 POSITION MONITORING")
-        st.markdown(f"""
-        **Dagelijks checken:**
-        - Z-score beweging
-        - Correlatie stabiliteit  
-        - Exit conditions
-        - P&L vs max verlies
-        
-        **Weekly:**
-        - Hedge ratio validatie
-        - Fundamentals check
-        """)
-    
-    with col3:
-        st.markdown("#### 🚨 EMERGENCY EXITS")
-        st.markdown(f"""
-        **Direct sluiten bij:**
-        - Correlatie < 0.4
-        - Verlies > €{max_risk_euro:.2f}
-        - Extreme news (earnings)
-        - Market crash (VIX > 35)
-        
-        **Hoe sluiten:**
-        - Market orders (snel)
-        - Beide posities tegelijk
-        """)
-    
-    # === EXECUTION SUMMARY ===
-    st.markdown("---")
-    
-    if abs(current_zscore) >= zscore_entry_threshold:
-        trade_type = "LONG SPREAD" if current_zscore <= -zscore_entry_threshold else "SHORT SPREAD"
-        st.success(f"### 🚀 READY TO EXECUTE: {trade_type}")
-        
-        st.markdown(f"""
-        **SAMENVATTING:**
-        1. **Capital**: €{trading_capital} beschikbaar
-        2. **Risico**: Max €{max_risk_euro:.2f} verlies
-        3. **Signaal**: {trade_type} (Z = {current_zscore:.2f})
-        4. **Hedge Ratio**: {beta:.9f}
-        5. **Max Trade Tijd**: 30 dagen
-        
-        **VOLGENDE STAP**: Plaats de orders zoals hierboven beschreven
-        """)
-        
-        # Warning for small capital
-        if trading_capital < 200:
-            st.warning("⚠️ **Klein Capital Waarschuwing**: Met €{} zijn transactiekosten relatief hoog. Overweeg ETFs voor pairs trading.".format(trading_capital))
+        if abs(current_zscore) >= zscore_entry_threshold:
             
-    else:
-        st.info("### ⏳ MONITORING MODE")
-        st.markdown(f"""
-        **ACTIES:**
-        1. **Monitor**: Z-score richting ±{zscore_entry_threshold:.1f}
-        2. **Check**: Correlatie blijft > 0.6  
-        3. **Prepare**: Capital ready voor snelle execution
-        4. **Alert**: Stel price alerts in bij brokers
-        """)
+            signal_type = "LONG SPREAD" if current_zscore <= -zscore_entry_threshold else "SHORT SPREAD"
+            
+            st.markdown(f"### 🎯 {signal_type} - Exchange Orders:")
+            
+            if current_zscore <= -zscore_entry_threshold:
+                # LONG SPREAD instructions
+                st.markdown(f"""
+                **STAP 1: KOOP {name1}**
+                - Ga naar {name1}/USDT trading pair
+                - Order Type: MARKET BUY  
+                - Quantity: {shares_asset1:.6f} {name1}
+                - Est. Cost: ~{cost_asset1:.2f} USDT
+                
+                **STAP 2: SHORT {name2}**
+                - Ga naar {name2}/USDT trading pair
+                - Order Type: MARKET SELL (Futures/Margin)
+                - Quantity: {shares_asset2:.6f} {name2}
+                - Est. Proceeds: ~{cost_asset2:.2f} USDT
+                
+                **STAP 3: SET ALERTS**
+                - Price Alert {name2} ≤ {profit_price2:.6f} USDT (PROFIT)
+                - Price Alert {name2} ≥ {stoploss_price2:.6f} USDT (STOP LOSS)
+                """)
+            else:
+                # SHORT SPREAD instructions
+                st.markdown(f"""
+                **STAP 1: SHORT {name1}**
+                - Ga naar {name1}/USDT trading pair
+                - Order Type: MARKET SELL (Futures/Margin)
+                - Quantity: {shares_asset1:.6f} {name1}
+                - Est. Proceeds: ~{cost_asset1:.2f} USDT
+                
+                **STAP 2: KOOP {name2}**  
+                - Ga naar {name2}/USDT trading pair
+                - Order Type: MARKET BUY
+                - Quantity: {shares_asset2:.6f} {name2}
+                - Est. Cost: ~{cost_asset2:.2f} USDT
+                
+                **STAP 3: SET ALERTS**
+                - Price Alert {name2} ≥ {profit_price2_short:.6f} USDT (PROFIT)
+                - Price Alert {name2} ≤ {stoploss_price2_short:.6f} USDT (STOP LOSS)
+                """)
+                
+        else:
+            st.info("⏳ Nog geen signaal - stel price alerts in om automatisch genotificeerd te worden")
     
-    # === BROKER REQUIREMENTS ===
-    with st.expander("🏦 Broker Vereisten voor €{} Trading".format(trading_capital), expanded=False):
-        st.markdown(f"""
-        ### **Minimum Account Vereisten:**
-        - **Margin Account**: Voor short selling
-        - **Day Trading**: Niet nodig (hold >1 dag)
-        - **Minimum Balance**: €{max(1000, trading_capital * 2)} aanbevolen
-        
-        ### **Trading Permissions:**
-        - **Short Selling**: Beide assets shortbaar
-        - **Options** (alternatief): Voor kleinere accounts
-        - **Fractional Shares**: Als beschikbaar
-        
-        ### **Kosten Structuur:**
-        - **Per Trade**: €1-5 per order (4 orders per pair)
-        - **Margin Cost**: ~5% jaar voor shorts
-        - **FX Cost**: USD/EUR conversie ~0.5%
-        
-        ### **Aanbevolen Brokers:**
-        - **Interactive Brokers**: Laagste kosten
-        - **DeGiro**: Europees, geen margin
-        - **eToro**: Copy trading pairs
-        """)
+    # === RISK WARNING ===
+    st.markdown("---")
+    st.warning(f"""
+    ⚠️ **TRADING RISICO'S:**
+    - **Max verlies per trade**: {max_risk_usdt:.2f} USDT ({risk_per_trade}% van capital)
+    - **Margin vereist**: Voor short positions op futures/margin accounts  
+    - **Funding fees**: Bij overnight futures positions
+    - **Liquidation risk**: Als margin te laag wordt
+    - **Correlation risk**: Als {name1} en {name2} decorreleren
     
-    # === PAIR-SPECIFIC NOTES ===
-    with st.expander(f"📋 Specifieke Notes voor {name1} vs {name2}", expanded=False):
-        st.markdown(f"""
-        ### **Dit Paar Kenmerken:**
-        - **Hedge Ratio**: {beta:.3f} (1 {name1} = {beta:.3f} {name2})
-        - **Correlatie**: {recent_corr:.3f}
-        - **Spread Volatility**: {volatility_spread:.1f}%
-        - **Mean Reversion**: {len(df[abs(df['zscore']) > zscore_entry_threshold])} signalen in periode
+    **Zorg ervoor dat je:**
+    - Margin account hebt voor short selling
+    - Price alerts hebt ingesteld  
+    - Stop loss discipline handhaaft
+    - Maximaal {min(5, int(trading_capital / (max_risk_usdt * 10)))} trades tegelijk doet
+    """)
+    
+    # === MOBILE ALERTS SECTION ===
+    with st.expander("📱 TradingView/Exchange Mobile Alerts Setup", expanded=False):
+        st.markdown("""
+        ### 📱 Mobile Price Alerts Instellen:
         
-        ### **Trading History:**
-        - **Gemiddelde spread**: ${spread_mean:.4f}
-        - **Spread range**: ${df['spread'].min():.4f} tot ${df['spread'].max():.4f}
-        - **Z-score extremen**: {df['zscore'].min():.2f} tot {df['zscore'].max():.2f}
+        **TradingView Alerts:**
+        1. Open TradingView app
+        2. Ga naar de coin chart
+        3. Klik op Alert (bell icon)
+        4. Set "Price crosses above/below [target price]"
+        5. Enable push notifications
         
-        ### **Specifieke Risico's:**
-        - **Sector Risk**: Beide assets zelfde sector?
-        - **News Risk**: Earnings dates checken
-        - **Liquidity**: Vooral {name2} liquiditeit
+        **Binance Mobile Alerts:**
+        1. Open Binance app  
+        2. Ga naar Markets → [COIN]
+        3. Klik op Bell icon (top right)
+        4. Set "Price Alert" met target prijzen
+        5. Enable push notifications
+        
+        **Bybit Mobile Alerts:**
+        1. Open Bybit app
+        2. Trading → [PAIR] 
+        3. Alert icon → Create Alert
+        4. Set price levels
+        5. Enable notifications
         """)
 # === REALISTIC PAIRS TRADING BACKTEST ===
 def run_realistic_pairs_backtest(df, entry_threshold, exit_threshold, initial_capital=100000, 
