@@ -659,7 +659,7 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             #### 🔴 VERKOOP {name1} (SHORT)
             - **Aantal**: {shares_asset1:.4f} {name1}
             - **Huidige Prijs**: {current_price1:.8f} USDT
-            - **Totaal**: {cost_asset1:.2f} USDT
+            - **Totaal**: {cost_asset1:.6f} USDT
             - **Order Type**: MARKET SELL (SHORT)
             """)
             
@@ -668,7 +668,7 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             #### 🟢 KOOP {name2}
             - **Aantal**: {shares_asset2:.0f} {name2}
             - **Huidige Prijs**: {current_price2:.8f} USDT
-            - **Totaal**: {cost_asset2:.2f} USDT
+            - **Totaal**: {cost_asset2:.6f} USDT
             - **Order Type**: MARKET BUY
             """)
         
