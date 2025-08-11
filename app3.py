@@ -1,4 +1,4 @@
-import streamlit as st
+Vimport streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -568,7 +568,7 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             #### 🟢 KOOP {name1}
             - **Aantal**: {shares_asset1:.4f} {name1}
             - **Huidige Prijs**: {current_price1:.8f} USDT
-            - **Totaal**: {cost_asset1:.2f} USDT
+            - **Totaal**: {cost_asset1:.4f} USDT
             - **Order Type**: MARKET BUY
             """)
             
@@ -577,7 +577,7 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
             #### 🔴 VERKOOP {name2} (SHORT)
             - **Aantal**: {shares_asset2:.0f} {name2}
             - **Huidige Prijs**: {current_price2:.8f} USDT  
-            - **Totaal**: {cost_asset2:.2f} USDT
+            - **Totaal**: {cost_asset2:.4f} USDT
             - **Order Type**: MARKET SELL (SHORT)
             """)
         
