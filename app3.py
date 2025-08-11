@@ -436,70 +436,123 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         st.metric("Hedge Ratio", f"{beta:.6f}")
     
     # === IMPROVED POSITION SIZING ===
+    def calculate_balanced_positions(capital, price1, price2, hedge_ratio, max_position_ratio=3.0,
+                                     min_notional=1.0, price_floor=1e-12):
+        """
+        Robuustere versie van calculate_balanced_positions:
+        - voorkomt deling door 0
+        - handhaaft minimale notionele waarde per leg (min_notional)
+        - beperkt uiteindelijke kosten per leg tot max_position_ratio * capital_per_leg
+        - returned quantities aangepast aan prijs-orde (ronding dynamisch)
+        """
+        # Guards
+        price1 = max(price1, price_floor)
+        price2 = max(price2, price_floor)
+        hedge_ratio_safe = hedge_ratio if abs(hedge_ratio) > 1e-12 else 0.0
     
-    def calculate_balanced_positions(capital, price1, price2, hedge_ratio, max_position_ratio=3.0):
-        """
-        Calculate balanced positions that respect both capital limits and hedge ratio
-        
-        For pairs trading:
-        - Long Asset1: quantity1 * price1 = dollar_amount1
-        - Short Asset2: quantity2 * price2 = dollar_amount2
-        - Hedge constraint: quantity1 * hedge_ratio ≈ quantity2 (for correlation)
-        
-        But we want balanced dollar amounts, so we use leverage on the smaller position
-        """
-        
-        # Start with 50/50 capital split
-        capital_per_leg = capital * 0.49  # 98% of capital, 49% per leg
-        
-        # Calculate base quantities with equal dollar amounts
+        capital_per_leg = capital * 0.49  # 49% per leg
+    
+        # Base equal-dollar quantities
         base_quantity1 = capital_per_leg / price1
         base_quantity2 = capital_per_leg / price2
-        
-        # Calculate what hedge ratio would give us with equal dollars
-        actual_ratio = base_quantity2 / base_quantity1 if base_quantity1 != 0 else 0
-        
-        # Compare with theoretical hedge ratio
-        ratio_difference = abs(actual_ratio - abs(hedge_ratio)) / abs(hedge_ratio) if hedge_ratio != 0 else float('inf')
-        
-        # If ratios are very different, use leverage/adjustment
-        if ratio_difference > 0.5 or actual_ratio == 0:  # More than 50% difference
-            
-            # Method 1: Use theoretical hedge ratio with leverage on smaller position
-            if abs(hedge_ratio) < 1:  # Asset2 needs more leverage
-                quantity1 = capital_per_leg / price1
-                quantity2 = quantity1 * abs(hedge_ratio)
-                
-                # If this makes quantity2 too expensive, add leverage factor
-                cost2 = quantity2 * price2
-                if cost2 > capital_per_leg * max_position_ratio:
-                    # Scale down to manageable size
-                    scale_factor = (capital_per_leg * max_position_ratio) / cost2
-                    quantity2 *= scale_factor
-                    quantity1 *= scale_factor
-                    
-            else:  # Asset1 needs more leverage  
-                quantity2 = capital_per_leg / price2
-                quantity1 = quantity2 / abs(hedge_ratio)
-                
-                # If this makes quantity1 too expensive, add leverage factor
-                cost1 = quantity1 * price1
-                if cost1 > capital_per_leg * max_position_ratio:
-                    scale_factor = (capital_per_leg * max_position_ratio) / cost1
-                    quantity1 *= scale_factor
-                    quantity2 *= scale_factor
-                    
-        else:
-            # Hedge ratio is reasonable, use equal dollar amounts
-            quantity1 = base_quantity1
-            quantity2 = base_quantity2
-        
-        # Calculate final costs
-        final_cost1 = quantity1 * price1
-        final_cost2 = quantity2 * price2
-        
-        return quantity1, quantity2, final_cost1, final_cost2, ratio_difference
     
+        # avoid division by zero when base_quantity1 is zero
+        actual_ratio = (base_quantity2 / base_quantity1) if base_quantity1 > 0 else 0.0
+    
+        # safe ratio_difference: if hedge_ratio_safe == 0, set large difference
+        if hedge_ratio_safe == 0.0:
+            ratio_difference = float('inf')
+        else:
+            ratio_difference = abs(actual_ratio - abs(hedge_ratio_safe)) / abs(hedge_ratio_safe)
+    
+        # Start with defaults
+        quantity1 = base_quantity1
+        quantity2 = base_quantity2
+    
+        # If huge mismatch, try to use theoretical hedge ratio
+        if ratio_difference > 0.5 or actual_ratio == 0:
+            # If hedge_ratio is essentially zero, fallback to equal-dollar
+            if hedge_ratio_safe == 0.0:
+                quantity1 = base_quantity1
+                quantity2 = base_quantity2
+            else:
+                if abs(hedge_ratio_safe) < 1:  # Asset2 needs less units (hedge_ratio < 1)
+                    quantity1 = capital_per_leg / price1
+                    quantity2 = quantity1 * abs(hedge_ratio_safe)
+                else:  # Asset1 needs less units
+                    quantity2 = capital_per_leg / price2
+                    quantity1 = quantity2 / abs(hedge_ratio_safe)
+    
+        # Enforce minimum notional (so very small price coins still have some cost)
+        cost1 = quantity1 * price1
+        cost2 = quantity2 * price2
+    
+        # If any leg below min_notional, scale up that leg if capital allows, else scale both down proportionally
+        if cost1 < min_notional or cost2 < min_notional:
+            # scale factor to bring the smaller leg to min_notional
+            scale_up = 1.0
+            if cost1 < min_notional:
+                scale_up = max(scale_up, min_notional / max(cost1, price1*1e-8))
+            if cost2 < min_notional:
+                scale_up = max(scale_up, min_notional / max(cost2, price2*1e-8))
+            # check if we can scale up within capital limits
+            if (cost1 * scale_up + cost2 * scale_up) <= capital:
+                quantity1 *= scale_up
+                quantity2 *= scale_up
+                cost1 *= scale_up
+                cost2 *= scale_up
+            else:
+                # scale down to fit capital
+                scale_down = capital / (cost1 + cost2) if (cost1 + cost2) > 0 else 0.0
+                quantity1 *= scale_down
+                quantity2 *= scale_down
+                cost1 *= scale_down
+                cost2 *= scale_down
+    
+        # Enforce a max per-leg exposure (max_position_ratio * capital_per_leg)
+        max_leg_cost = capital_per_leg * max_position_ratio
+        if cost1 > max_leg_cost or cost2 > max_leg_cost:
+            scale_factor = min(max_leg_cost / cost1 if cost1 > 0 else 1.0,
+                               max_leg_cost / cost2 if cost2 > 0 else 1.0)
+            if scale_factor < 1.0:
+                quantity1 *= scale_factor
+                quantity2 *= scale_factor
+                cost1 *= scale_factor
+                cost2 *= scale_factor
+    
+        # Final safety: do not exceed total capital
+        total_cost = cost1 + cost2
+        if total_cost > capital:
+            scale_final = capital / total_cost
+            quantity1 *= scale_final
+            quantity2 *= scale_final
+            cost1 *= scale_final
+            cost2 *= scale_final
+    
+        # dynamic rounding: for cheap coins more decimals, for expensive coins fewer
+        def nice_round(q, price):
+            if price < 0.01:
+                return round(q, 0)  # tiny price -> integer units often make sense
+            elif price < 1:
+                return round(q, 4)
+            elif price < 50:
+                return round(q, 6)
+            else:
+                return round(q, 8)
+    
+        quantity1_rounded = nice_round(quantity1, price1)
+        quantity2_rounded = nice_round(quantity2, price2)
+    
+        # recalc final costs using rounded quantities
+        final_cost1 = quantity1_rounded * price1
+        final_cost2 = quantity2_rounded * price2
+    
+        # ratio difference relative to hedge theory (if hedge_ratio is zero, keep inf)
+        final_ratio_difference = ratio_difference
+    
+        return quantity1_rounded, quantity2_rounded, final_cost1, final_cost2, final_ratio_difference
+    
+        
     # === PRICE LEVEL CALCULATIONS ===
     
     # Calculate exact price levels for exits based on Z-score targets
