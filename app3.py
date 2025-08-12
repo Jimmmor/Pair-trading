@@ -91,7 +91,6 @@ class PairsTradingCalculator:
         self.risk_per_trade = risk_per_trade / 100
         
     def calculate_balanced_positions(self, capital, price1, price2, hedge_ratio, 
-    def calculate_balanced_positions(self, capital, price1, price2, hedge_ratio, 
                                    max_position_ratio=3.0, min_notional=1.0):
         """CORRECTED: Proper hedge ratio application"""
         
