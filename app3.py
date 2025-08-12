@@ -91,39 +91,39 @@ class PairsTradingCalculator:
         self.risk_per_trade = risk_per_trade / 100
         
     def calculate_balanced_positions(self, capital, price1, price2, hedge_ratio, 
+    def calculate_balanced_positions(self, capital, price1, price2, hedge_ratio, 
                                    max_position_ratio=3.0, min_notional=1.0):
-        """Robust position sizing with proper hedge ratio"""
+        """CORRECTED: Proper hedge ratio application"""
+        
         # Safety guards
         price1 = max(price1, 1e-12)
         price2 = max(price2, 1e-12)
         hedge_ratio = hedge_ratio if abs(hedge_ratio) > 1e-12 else 1.0
         
+        # For market-neutral spread: spread = price1 - beta * price2
+        # This means: Long 1 unit Asset1, Short beta units Asset2
+        
+        # Calculate based on equal dollar exposure
         capital_per_leg = capital * 0.49
         
-        # Calculate quantities using hedge ratio
-        if abs(hedge_ratio) < 1:
-            # Asset2 needs fewer units
-            quantity1 = capital_per_leg / price1
-            quantity2 = quantity1 * abs(hedge_ratio)
-        else:
-            # Asset1 needs fewer units
-            quantity2 = capital_per_leg / price2
-            quantity1 = quantity2 / abs(hedge_ratio)
+        # Method 1: Fix quantity1, calculate quantity2
+        quantity1 = capital_per_leg / price1
+        quantity2 = quantity1 * abs(hedge_ratio)  # ✅ CORRECTED: More units of Asset2
         
-        # Calculate costs
+        # Verify costs
         cost1 = quantity1 * price1
         cost2 = quantity2 * price2
         
-        # Enforce minimum notional
+        # If total exceeds capital, scale down
         total_cost = cost1 + cost2
         if total_cost > capital:
             scale_factor = capital / total_cost
             quantity1 *= scale_factor
             quantity2 *= scale_factor
-            cost1 *= scale_factor
-            cost2 *= scale_factor
+            cost1 = quantity1 * price1
+            cost2 = quantity2 * price2
         
-        # Dynamic rounding based on price
+        # Smart rounding
         def smart_round(qty, price):
             if price < 0.01:
                 return round(qty, 0)
@@ -142,6 +142,7 @@ class PairsTradingCalculator:
         
         return quantity1, quantity2, final_cost1, final_cost2
     
+        
     def calculate_price_targets(self, current_price1, current_price2, 
                               target_zscore, spread_mean, spread_std, alpha, beta):
         """Calculate price targets for given Z-score - CORRECTED"""
@@ -284,18 +285,25 @@ class PairsBacktester:
         return {'should_exit': False, 'reason': None}
     
     def _enter_position(self, signal_type, current_data, current_date, cash, portfolio_value):
-        """Enter new position"""
+        """CORRECTED: Proper hedge ratio in backtest"""
         position_size = self.position_size_pct * portfolio_value
         capital_per_leg = position_size / 2
         
+        # CORRECTED LOGIC:
+        # Spread = price1 - beta * price2
+        # Long spread = Long Asset1, Short (beta * Asset1_quantity) of Asset2
+        # Short spread = Short Asset1, Long (beta * Asset1_quantity) of Asset2
+        
+        quantity1_base = capital_per_leg / current_data['price1']
+        
         if signal_type == 'long_spread':
-            # Long asset1, short asset2
-            shares1 = capital_per_leg / current_data['price1']
-            shares2 = -shares1 * processor.beta  # Negative = short
+            # Long spread: Buy Asset1, Sell Asset2
+            shares1 = quantity1_base
+            shares2 = -quantity1_base * processor.beta  # ✅ NEGATIVE = short position
         else:
-            # Short asset1, long asset2
-            shares1 = -capital_per_leg / current_data['price1']  # Negative = short
-            shares2 = abs(shares1) * processor.beta
+            # Short spread: Sell Asset1, Buy Asset2  
+            shares1 = -quantity1_base  # ✅ NEGATIVE = short position
+            shares2 = quantity1_base * processor.beta   # ✅ POSITIVE = long position
         
         initial_value = abs(shares1 * current_data['price1']) + abs(shares2 * current_data['price2'])
         transaction_costs = initial_value * self.transaction_cost
