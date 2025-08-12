@@ -152,7 +152,14 @@ class PairsTradingCalculator:
         for pct in [-10, -5, 0, 5, 10]:
             new_price1 = current_price1 * (1 + pct/100)
             required_price2 = alpha + beta * new_price1 + target_spread
-            scenarios[f'price1_{pct:+d}pct'] = {
+            
+            # Create key that matches expected format
+            if pct >= 0:
+                key = f'price1_+{pct}pct'
+            else:
+                key = f'price1_{pct}pct'
+                
+            scenarios[key] = {
                 'price1': new_price1,
                 'required_price2': required_price2,
                 'price2_change_pct': ((required_price2 - current_price2) / current_price2) * 100
@@ -626,7 +633,8 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             **Stop Z-score: {stop_zscore:.1f}**
             
             **Emergency Exit:**
-            - If {name1} moves against: {name2} → {stop_targets['price1_0pct']['required_price2']:.8f}
+            - If {name1} +5%: {name2} → {stop_targets['price1_+5pct']['required_price2']:.8f}
+            - If {name1} -5%: {name2} → {stop_targets['price1_-5pct']['required_price2']:.8f}
             - **Max Loss**: {max_risk_usdt:.2f} USDT
             - **Emergency close** if correlation breaks
             """)
