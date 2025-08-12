@@ -49,17 +49,19 @@ class PairsDataProcessor:
         }).dropna()
     
     def _calculate_regression_spread(self, df):
-        """Calculate regression parameters and spread - UNIFIED VERSION"""
+        """Calculate regression parameters and spread - CORRECTED VERSION"""
+        # CORRECT REGRESSION: price2 = alpha + beta * price1
         X = df['price1'].values.reshape(-1, 1)
         y = df['price2'].values
         
         self.model.fit(X, y)
         self.alpha = self.model.intercept_
-        self.beta = self.model.coef_[0]
+        self.beta = self.model.coef_[0]  # This is the hedge ratio
         self.r_squared = self.model.score(X, y)
         
-        # UNIFIED SPREAD CALCULATION: price2 - (alpha + beta * price1)
-        df['spread'] = df['price2'] - (self.alpha + self.beta * df['price1'])
+        # CORRECT SPREAD: price1 - beta * price2 (market neutral)
+        # This represents: Long 1 unit of Asset1, Short beta units of Asset2
+        df['spread'] = df['price1'] - self.beta * df['price2']
         
         return df
     
@@ -142,25 +144,31 @@ class PairsTradingCalculator:
     
     def calculate_price_targets(self, current_price1, current_price2, 
                               target_zscore, spread_mean, spread_std, alpha, beta):
-        """Calculate price targets for given Z-score"""
+        """Calculate price targets for given Z-score - CORRECTED"""
         target_spread = spread_mean + target_zscore * spread_std
         
-        # Multiple scenarios for price targets
+        # CORRECTED: spread = price1 - beta * price2
+        # So: target_spread = target_price1 - beta * target_price2
+        # Rearranged: target_price2 = (target_price1 - target_spread) / beta
+        
         scenarios = {}
         
-        # If price1 moves ±10%, what should price2 be?
+        # If price1 moves ±%, what should price2 be?
         for pct in [-10, -5, 0, 5, 10]:
-            new_price1 = current_price1 * (1 + pct/100)
-            required_price2 = alpha + beta * new_price1 + target_spread
+            target_price1 = current_price1 * (1 + pct/100)
             
-            # Create key that matches expected format
-            if pct >= 0:
-                key = f'price1_+{pct}pct'
+            # From spread formula: price1 - beta * price2 = target_spread
+            # Solve for price2: price2 = (price1 - target_spread) / beta
+            if abs(beta) > 1e-12:  # Avoid division by zero
+                required_price2 = (target_price1 - target_spread) / beta
             else:
-                key = f'price1_{pct}pct'
+                required_price2 = current_price2  # Fallback
+                
+            # Create key that matches expected format
+            key = f'price1_{pct:+d}pct' if pct >= 0 else f'price1_{pct}pct'
                 
             scenarios[key] = {
-                'price1': new_price1,
+                'price1': target_price1,
                 'required_price2': required_price2,
                 'price2_change_pct': ((required_price2 - current_price2) / current_price2) * 100
             }
