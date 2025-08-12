@@ -607,26 +607,25 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             fig_scatter.update_traces(marker=dict(size=6, opacity=0.6))
             st.plotly_chart(fig_scatter, use_container_width=True)
 
-# === PRACTICAL TRADING EXECUTION ===
+# === PRAKTISCHE TRADE UITVOERING ===
 with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
     st.header("🎯 Live Trading Execution Dashboard")
     
-    # Capital input
+    # Input voor tradingkapitaal en risico
     col1, col2, col3 = st.columns(3)
     with col1:
         trading_capital = st.number_input("💵 Trading Capital (USDT)", 
-                                        min_value=50, max_value=1000000, 
-                                        value=1000, step=50)
+                                          min_value=50, max_value=1_000_000, 
+                                          value=1000, step=50)
     with col2:
         max_risk_pct = st.slider("🎯 Max Risk per Trade (%)", 1.0, 10.0, 2.0, 0.5)
     with col3:
         max_risk_usdt = trading_capital * (max_risk_pct / 100)
         st.metric("Max Risk Amount", f"{max_risk_usdt:.2f} USDT")
     
-    # Current market status
+    # Huidige marktprijzen en signalen
     st.subheader("📊 Current Market Status")
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.metric(f"{name1} Price", f"{current_price1:.8f} USDT")
     with col2:
@@ -638,77 +637,74 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         method_display = "Dollar-Neutral" if use_dollar_neutral else f"β = {processor.beta:.6f}"
         st.metric("Hedge Method", method_display)
     
-    # Trading decision and execution
     st.markdown("---")
     
+    # Check of er een trade signaal is
     if abs(current_zscore) >= zscore_entry_threshold:
         signal_type = "LONG SPREAD" if current_zscore <= -zscore_entry_threshold else "SHORT SPREAD"
         signal_color = "success" if current_zscore <= -zscore_entry_threshold else "error"
-        
         getattr(st, signal_color)(f"🎯 **{signal_type} SIGNAL** - Z-Score: {current_zscore:.2f}")
         
-        # Calculate positions
+        # Posities berekenen
         qty1, qty2, cost1, cost2 = calculator.calculate_balanced_positions(
             trading_capital, current_price1, current_price2, processor.beta, use_dollar_neutral
         )
-        
         total_cost = cost1 + cost2
         
-        # Position details
+        # Positie details tonen
         st.subheader("📋 Exact Trade Execution")
-        
         col1, col2 = st.columns(2)
-        
         if current_zscore <= -zscore_entry_threshold:
             # LONG SPREAD
             with col1:
                 st.success(f"""
                 #### 🟢 BUY {name1}
-                - **Quantity**: {qty1:.6f} {name1}
-                - **Price**: {current_price1:.8f} USDT
-                - **Cost**: {cost1:.2f} USDT
-                - **Order**: MARKET BUY
+                - Quantity: {qty1:.6f} {name1}
+                - Price: {current_price1:.8f} USDT
+                - Cost: {cost1:.2f} USDT
+                - Order: MARKET BUY
                 """)
             with col2:
                 st.error(f"""
                 #### 🔴 SHORT {name2}
-                - **Quantity**: {qty2:.6f} {name2}
-                - **Price**: {current_price2:.8f} USDT
-                - **Value**: {cost2:.2f} USDT
-                - **Order**: MARKET SELL (FUTURES)
+                - Quantity: {qty2:.6f} {name2}
+                - Price: {current_price2:.8f} USDT
+                - Value: {cost2:.2f} USDT
+                - Order: MARKET SELL (FUTURES)
                 """)
         else:
             # SHORT SPREAD
             with col1:
                 st.error(f"""
                 #### 🔴 SHORT {name1}
-                - **Quantity**: {qty1:.6f} {name1}
-                - **Price**: {current_price1:.8f} USDT
-                - **Value**: {cost1:.2f} USDT
-                - **Order**: MARKET SELL (FUTURES)
+                - Quantity: {qty1:.6f} {name1}
+                - Price: {current_price1:.8f} USDT
+                - Value: {cost1:.2f} USDT
+                - Order: MARKET SELL (FUTURES)
                 """)
             with col2:
                 st.success(f"""
                 #### 🟢 BUY {name2}
-                - **Quantity**: {qty2:.6f} {name2}
-                - **Price**: {current_price2:.8f} USDT
-                - **Cost**: {cost2:.2f} USDT
-                - **Order**: MARKET BUY
+                - Quantity: {qty2:.6f} {name2}
+                - Price: {current_price2:.8f} USDT
+                - Cost: {cost2:.2f} USDT
+                - Order: MARKET BUY
                 """)
         
         st.info(f"**Total Used**: {total_cost:.2f} USDT / {trading_capital:.2f} USDT "
                 f"({(total_cost/trading_capital)*100:.1f}% efficiency)")
         
-        # Show hedging method effectiveness
         if not use_dollar_neutral and not is_suitable:
-            st.warning(f"⚠️ **Using weak hedge ratio** - Consider switching to Dollar-Neutral method")
+            st.warning("⚠️ **Using weak hedge ratio** - Consider switching to Dollar-Neutral method")
         
-        # Price targets
-        st.subheader("🎯 Price Targets & Alerts")
+        # EXIT STRATEGIE: Prijsdoelen en stop loss
+        st.subheader("🎯 Price Targets & Exit Strategy")
         
+        # Bepaal exit en stop loss z-score afhankelijk van trade richting
         exit_zscore = -zscore_exit_threshold if current_zscore <= -zscore_entry_threshold else zscore_exit_threshold
         stop_zscore = zscore_entry_threshold * 1.5 if current_zscore <= -zscore_entry_threshold else -zscore_entry_threshold * 1.5
         
+        # Bereken prijsdoelen op basis van exit z-score
         profit_targets = calculator.calculate_price_targets(
             current_price1, current_price2, exit_zscore,
             df['spread_mean'].iloc[-1], df['spread_std'].iloc[-1],
@@ -722,43 +718,41 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         )
         
         col1, col2 = st.columns(2)
-        
         with col1:
             st.success("#### 🎯 PROFIT TARGETS")
             st.markdown(f"""
-            **Target Z-score: {exit_zscore:.1f}**
+            **Target Z-score:** {exit_zscore:.2f}
             
-            **Price Scenarios:**
-            - If {name1} +5%: {name2} → {profit_targets['price1_+5pct']['required_price2']:.8f}
-            - If {name1} -5%: {name2} → {profit_targets['price1_-5pct']['required_price2']:.8f}
-            - If {name2} unchanged: Close at Z = {exit_zscore:.1f}
+            **Prijsdoelen:**
+            - Als {name1} +5% stijgt, dan {name2} moet zijn: {profit_targets['price1_+5pct']['required_price2']:.8f} USDT
+            - Als {name1} -5% daalt, dan {name2} moet zijn: {profit_targets['price1_-5pct']['required_price2']:.8f} USDT
+            - Bij onveranderde {name2} sluiten op Z = {exit_zscore:.2f}
             """)
-        
         with col2:
             st.error("#### 🛑 STOP LOSS")
             st.markdown(f"""
-            **Stop Z-score: {stop_zscore:.1f}**
+            **Stop Z-score:** {stop_zscore:.2f}
             
-            **Emergency Exit:**
-            - If {name1} +5%: {name2} → {stop_targets['price1_+5pct']['required_price2']:.8f}
-            - If {name1} -5%: {name2} → {stop_targets['price1_-5pct']['required_price2']:.8f}
-            - **Max Loss**: {max_risk_usdt:.2f} USDT
-            - **Emergency close** if correlation breaks
+            **Nooduitgang:**
+            - Als {name1} +5% stijgt, dan {name2} moet zijn: {stop_targets['price1_+5pct']['required_price2']:.8f} USDT
+            - Als {name1} -5% daalt, dan {name2} moet zijn: {stop_targets['price1_-5pct']['required_price2']:.8f} USDT
+            - Max verlies: {max_risk_usdt:.2f} USDT
+            - Sluit direct bij correlatiebreuk
             """)
-    
     else:
-        st.info(f"⏳ **NO SIGNAL** - Z-Score: {current_zscore:.2f}")
+        st.info(f"⏳ **NO SIGNAL** - Huidige Z-Score: {current_zscore:.2f}")
         
         distance_to_long = abs(current_zscore - (-zscore_entry_threshold))
         distance_to_short = abs(current_zscore - zscore_entry_threshold)
         
         st.markdown(f"""
-        ### ⌛ Waiting for Signal
+        ### ⌛ Wachten op Signaal
         
-        **Entry Levels:**
-        - 🟢 LONG SPREAD: Z ≤ -{zscore_entry_threshold:.1f} (need {distance_to_long:.2f} more)
-        - 🔴 SHORT SPREAD: Z ≥ +{zscore_entry_threshold:.1f} (need {distance_to_short:.2f} more)
+        **Ingangsniveaus:**
+        - 🟢 LONG SPREAD: Z ≤ -{zscore_entry_threshold:.2f} (nog {distance_to_long:.2f} nodig)
+        - 🔴 SHORT SPREAD: Z ≥ +{zscore_entry_threshold:.2f} (nog {distance_to_short:.2f} nodig)
         """)
+
 
 # === REALISTIC BACKTEST SECTION ===
 with st.expander("🎯 Realistic Pairs Backtest", expanded=True):
