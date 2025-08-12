@@ -84,45 +84,49 @@ class PairsDataProcessor:
         return df
 
 class PairsTradingCalculator:
-    """Unified trading calculations and position sizing"""
+    """Unified trading calculations and position sizing - CORRECTED"""
     
     def __init__(self, leverage=1, risk_per_trade=2.0):
         self.leverage = leverage
         self.risk_per_trade = risk_per_trade / 100
         
     def calculate_balanced_positions(self, capital, price1, price2, hedge_ratio, 
-                                   max_position_ratio=3.0, min_notional=1.0):
-        """CORRECTED: Proper hedge ratio application"""
+                                   use_dollar_neutral=False):
+        """CORRECTED: Proper hedge ratio application with dollar-neutral option"""
         
         # Safety guards
         price1 = max(price1, 1e-12)
         price2 = max(price2, 1e-12)
         hedge_ratio = hedge_ratio if abs(hedge_ratio) > 1e-12 else 1.0
         
-        # For market-neutral spread: spread = price1 - beta * price2
-        # This means: Long 1 unit Asset1, Short beta units Asset2
-        
-        # Calculate based on equal dollar exposure
         capital_per_leg = capital * 0.49
         
-        # Method 1: Fix quantity1, calculate quantity2
-        quantity1 = capital_per_leg / price1
-        quantity2 = quantity1 * abs(hedge_ratio)  # ✅ CORRECTED: More units of Asset2
-        
-        # Verify costs
-        cost1 = quantity1 * price1
-        cost2 = quantity2 * price2
-        
-        # If total exceeds capital, scale down
-        total_cost = cost1 + cost2
-        if total_cost > capital:
-            scale_factor = capital / total_cost
-            quantity1 *= scale_factor
-            quantity2 *= scale_factor
+        if use_dollar_neutral:
+            # DOLLAR-NEUTRAL: Equal dollar amounts (ignores hedge ratio)
+            quantity1 = capital_per_leg / price1
+            quantity2 = capital_per_leg / price2
             cost1 = quantity1 * price1
             cost2 = quantity2 * price2
+        else:
+            # REGRESSION-BASED: Use hedge ratio correctly
+            # For spread = price1 - beta * price2
+            # We need: 1 unit Asset1, beta units Asset2
+            quantity1 = capital_per_leg / price1
+            quantity2 = quantity1 * abs(hedge_ratio)  # ✅ CORRECTED
+            
+            cost1 = quantity1 * price1
+            cost2 = quantity2 * price2
+            
+            # Scale down if total exceeds capital
+            total_cost = cost1 + cost2
+            if total_cost > capital:
+                scale_factor = capital / total_cost
+                quantity1 *= scale_factor
+                quantity2 *= scale_factor
+                cost1 *= scale_factor
+                cost2 *= scale_factor
         
-        # Smart rounding
+        # Dynamic rounding based on price
         def smart_round(qty, price):
             if price < 0.01:
                 return round(qty, 0)
@@ -141,15 +145,10 @@ class PairsTradingCalculator:
         
         return quantity1, quantity2, final_cost1, final_cost2
     
-        
     def calculate_price_targets(self, current_price1, current_price2, 
                               target_zscore, spread_mean, spread_std, alpha, beta):
         """Calculate price targets for given Z-score - CORRECTED"""
         target_spread = spread_mean + target_zscore * spread_std
-        
-        # CORRECTED: spread = price1 - beta * price2
-        # So: target_spread = target_price1 - beta * target_price2
-        # Rearranged: target_price2 = (target_price1 - target_spread) / beta
         
         scenarios = {}
         
@@ -159,12 +158,11 @@ class PairsTradingCalculator:
             
             # From spread formula: price1 - beta * price2 = target_spread
             # Solve for price2: price2 = (price1 - target_spread) / beta
-            if abs(beta) > 1e-12:  # Avoid division by zero
+            if abs(beta) > 1e-12:
                 required_price2 = (target_price1 - target_spread) / beta
             else:
-                required_price2 = current_price2  # Fallback
+                required_price2 = current_price2
                 
-            # Create key that matches expected format
             key = f'price1_{pct:+d}pct' if pct >= 0 else f'price1_{pct}pct'
                 
             scenarios[key] = {
@@ -176,7 +174,7 @@ class PairsTradingCalculator:
         return scenarios
 
 class PairsBacktester:
-    """Realistic pairs trading backtest engine"""
+    """Realistic pairs trading backtest engine - CORRECTED"""
     
     def __init__(self, initial_capital=100000, transaction_cost=0.05, 
                  position_size_pct=20, stop_loss_pct=5.0, take_profit_pct=8.0,
@@ -284,23 +282,19 @@ class PairsBacktester:
         return {'should_exit': False, 'reason': None}
     
     def _enter_position(self, signal_type, current_data, current_date, cash, portfolio_value):
-        """CORRECTED: Proper hedge ratio in backtest"""
+        """CORRECTED: Enter new position with proper hedge ratio"""
         position_size = self.position_size_pct * portfolio_value
         capital_per_leg = position_size / 2
         
-        # CORRECTED LOGIC:
-        # Spread = price1 - beta * price2
-        # Long spread = Long Asset1, Short (beta * Asset1_quantity) of Asset2
-        # Short spread = Short Asset1, Long (beta * Asset1_quantity) of Asset2
-        
+        # CORRECTED LOGIC: spread = price1 - beta * price2
         quantity1_base = capital_per_leg / current_data['price1']
         
         if signal_type == 'long_spread':
-            # Long spread: Buy Asset1, Sell Asset2
+            # Long spread: Buy Asset1, Short beta*Asset1 of Asset2
             shares1 = quantity1_base
             shares2 = -quantity1_base * processor.beta  # ✅ NEGATIVE = short position
         else:
-            # Short spread: Sell Asset1, Buy Asset2  
+            # Short spread: Short Asset1, Buy beta*Asset1 of Asset2  
             shares1 = -quantity1_base  # ✅ NEGATIVE = short position
             shares2 = quantity1_base * processor.beta   # ✅ POSITIVE = long position
         
@@ -345,6 +339,21 @@ class PairsBacktester:
         
         return trade_result, current_value - exit_costs
 
+def check_hedge_quality(price1, price2, beta, min_efficiency=30):
+    """Check if pair is suitable for pairs trading"""
+    test_capital = 10000
+    
+    # Test regression-based method
+    qty1 = (test_capital/2) / price1
+    qty2 = qty1 * abs(beta)
+    cost1 = qty1 * price1
+    cost2 = qty2 * price2
+    
+    # Calculate efficiency as smaller position / larger position
+    hedge_efficiency = (min(cost1, cost2) / max(cost1, cost2)) * 100
+    
+    return hedge_efficiency, hedge_efficiency >= min_efficiency, cost1, cost2
+
 @st.cache_data
 def load_data(ticker_key, period, interval):
     """Load and cache market data"""
@@ -381,6 +390,16 @@ with st.sidebar:
     zscore_exit_threshold = st.slider("Exit Z-score", 0.0, 2.0, 0.5, 0.1)
     leverage = st.slider("Leverage", 1, 10, 3)
     risk_per_trade = st.slider("Risk per trade (%)", 0.1, 5.0, 1.0, 0.1)
+    
+    st.markdown("---")
+    st.header("🔄 Hedging Method")
+    hedging_method = st.radio(
+        "Position Sizing Method:",
+        ["Regression-Based (β)", "Dollar-Neutral (50/50)"],
+        help="Dollar-neutral ignores hedge ratio and uses equal $ amounts"
+    )
+    
+    use_dollar_neutral = (hedging_method == "Dollar-Neutral (50/50)")
 
 # Load and process data
 data1 = load_data(name1, periode, interval)
@@ -401,6 +420,67 @@ df = processor.process_pair_data(data1, data2)
 current_price1 = df['price1'].iloc[-1]
 current_price2 = df['price2'].iloc[-1]
 current_zscore = df['zscore'].iloc[-1]
+
+# ===== HEDGE QUALITY CHECK =====
+hedge_eff, is_suitable, example_cost1, example_cost2 = check_hedge_quality(
+    current_price1, current_price2, processor.beta
+)
+
+# Display hedge quality immediately
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if is_suitable:
+        st.success(f"✅ Good Hedge: {hedge_eff:.1f}%")
+    elif hedge_eff > 15:
+        st.warning(f"⚠️ Weak Hedge: {hedge_eff:.1f}%")
+    else:
+        st.error(f"❌ Poor Hedge: {hedge_eff:.1f}%")
+
+with col2:
+    st.metric("Example Trade Balance", f"${example_cost1:.0f} vs ${example_cost2:.0f}")
+
+with col3:
+    imbalance = abs(example_cost1 - example_cost2)
+    st.metric("Position Imbalance", f"${imbalance:.0f}")
+
+# Show detailed warning if bad
+if not is_suitable:
+    st.error(f"""
+    🚨 **HEDGE QUALITY WARNING**
+    
+    **Current Pair Analysis:**
+    - {name1}: ${example_cost1:,.0f} position
+    - {name2}: ${example_cost2:,.0f} position  
+    - Imbalance: {100-hedge_eff:.0f}% of trade is directional risk
+    
+    **This means:**
+    - Your "pairs trade" is actually {100-hedge_eff:.0f}% directional betting
+    - High correlation doesn't guarantee good hedging
+    - Position is NOT market-neutral
+    """)
+    
+    with st.expander("💡 See Solutions", expanded=False):
+        st.info(f"""
+        **SOLUTION OPTIONS:**
+        
+        1. **Switch to Dollar-Neutral** (Recommended)
+           - Use equal dollar amounts: ${10000/2:,.0f} each side
+           - Toggle the "Dollar-Neutral (50/50)" option in sidebar
+           - True market-neutral exposure
+        
+        2. **Try Better Crypto Pairs:**
+           - SOL/AVAX (similar price ranges ~$20-100)
+           - LINK/DOT (better ratios ~0.8-1.5)  
+           - UNI/SUSHI (closer relationships)
+        
+        3. **Use Ratio Trading:**
+           - Trade {name1}/{name2} ratio instead of price spread
+           - Better for large price differences
+        """)
+
+st.markdown("---")
 
 # === STATISTICAL ANALYSIS SECTION ===
 with st.expander("📊 Statistical Analysis", expanded=True):
@@ -509,6 +589,13 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             with col_b:
                 st.metric("Current Correlation", f"{df['rolling_corr'].iloc[-1]:.4f}")
                 st.metric("R-squared", f"{processor.r_squared:.4f}")
+                # Add hedge efficiency here too
+                if hedge_eff < 30:
+                    st.metric("Hedge Quality", f"{hedge_eff:.1f}%", delta="Poor ❌")
+                elif hedge_eff < 70:
+                    st.metric("Hedge Quality", f"{hedge_eff:.1f}%", delta="Weak ⚠️")
+                else:
+                    st.metric("Hedge Quality", f"{hedge_eff:.1f}%", delta="Good ✅")
         
         with col2:
             # Returns scatterplot
@@ -548,7 +635,8 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         signal_status = "🚨 TRADE SIGNAL!" if abs(current_zscore) >= zscore_entry_threshold else "⏳ Wait"
         st.metric("Z-Score", f"{current_zscore:.2f}", delta=signal_status)
     with col4:
-        st.metric("Hedge Ratio (β)", f"{processor.beta:.6f}")
+        method_display = "Dollar-Neutral" if use_dollar_neutral else f"β = {processor.beta:.6f}"
+        st.metric("Hedge Method", method_display)
     
     # Trading decision and execution
     st.markdown("---")
@@ -561,7 +649,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         
         # Calculate positions
         qty1, qty2, cost1, cost2 = calculator.calculate_balanced_positions(
-            trading_capital, current_price1, current_price2, processor.beta
+            trading_capital, current_price1, current_price2, processor.beta, use_dollar_neutral
         )
         
         total_cost = cost1 + cost2
@@ -584,7 +672,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             with col2:
                 st.error(f"""
                 #### 🔴 SHORT {name2}
-                - **Quantity**: {qty2:.0f} {name2}
+                - **Quantity**: {qty2:.6f} {name2}
                 - **Price**: {current_price2:.8f} USDT
                 - **Value**: {cost2:.2f} USDT
                 - **Order**: MARKET SELL (FUTURES)
@@ -602,7 +690,7 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
             with col2:
                 st.success(f"""
                 #### 🟢 BUY {name2}
-                - **Quantity**: {qty2:.0f} {name2}
+                - **Quantity**: {qty2:.6f} {name2}
                 - **Price**: {current_price2:.8f} USDT
                 - **Cost**: {cost2:.2f} USDT
                 - **Order**: MARKET BUY
@@ -610,6 +698,10 @@ with st.expander("🎯 Praktische Trade Uitvoering", expanded=True):
         
         st.info(f"**Total Used**: {total_cost:.2f} USDT / {trading_capital:.2f} USDT "
                 f"({(total_cost/trading_capital)*100:.1f}% efficiency)")
+        
+        # Show hedging method effectiveness
+        if not use_dollar_neutral and not is_suitable:
+            st.warning(f"⚠️ **Using weak hedge ratio** - Consider switching to Dollar-Neutral method")
         
         # Price targets
         st.subheader("🎯 Price Targets & Alerts")
@@ -945,7 +1037,7 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
         
         # Calculate positions for guide
         qty1, qty2, cost1, cost2 = calculator.calculate_balanced_positions(
-            trading_capital, current_price1, current_price2, processor.beta
+            trading_capital, current_price1, current_price2, processor.beta, use_dollar_neutral
         )
         
         st.subheader(f"🎯 {signal_type} Execution on Binance/Bybit")
@@ -969,7 +1061,7 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
             Exchange: Binance/Bybit Futures
             Pair: {name2}/USDT (Perpetual)
             Order Type: MARKET SELL (Open Short)
-            Quantity: {qty2:.0f} {name2}
+            Quantity: {qty2:.6f} {name2}
             Leverage: 1x-3x (recommended)
             Margin Required: ~{cost2:.2f} USDT
             ```
@@ -978,7 +1070,7 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
             ```
             Take Profit: Z-score ≥ -{zscore_exit_threshold:.1f}
             Stop Loss: Portfolio loss > {risk_per_trade}%
-            Time Exit: Close after {max_trade_days} days
+            Time Exit: Close after {30} days
             ```
             """)
         else:
@@ -1001,7 +1093,7 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
             Exchange: Binance/Bybit Spot
             Pair: {name2}/USDT
             Order Type: MARKET BUY
-            Quantity: {qty2:.0f} {name2}
+            Quantity: {qty2:.6f} {name2}
             Estimated Cost: ~{cost2:.2f} USDT
             ```
             
@@ -1009,7 +1101,7 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
             ```
             Take Profit: Z-score ≤ {zscore_exit_threshold:.1f}
             Stop Loss: Portfolio loss > {risk_per_trade}%
-            Time Exit: Close after {max_trade_days} days
+            Time Exit: Close after {30} days
             ```
             """)
     else:
@@ -1039,6 +1131,8 @@ with st.expander("🏪 Exchange Execution Guide", expanded=False):
     - Check funding rates before opening futures positions
     - Monitor both legs independently
     - Have exit plan ready before entering
+    
+    **Current Pair Quality: {hedge_eff:.1f}% hedge efficiency**
     """)
 
 # === ADVANCED ANALYTICS ===
@@ -1101,12 +1195,21 @@ st.markdown("""
 - **Pairs trading** profits from relative price movements, not absolute direction
 - **Hedge ratio (β)** determines position sizes for market-neutral exposure  
 - **Z-score** measures how far spread deviates from historical mean
+- **Dollar-neutral** uses equal dollar amounts, ignoring hedge ratio (safer for poor hedge ratios)
 - **Risk management** is crucial - never risk more than you can afford to lose
 - **Backtest results** don't guarantee future performance
+
+### ✅ **CORRECTED FEATURES:**
+- ✅ Fixed hedge ratio calculation and application
+- ✅ Added hedge quality check with warnings
+- ✅ Added dollar-neutral hedging option
+- ✅ Corrected backtest position sizing
+- ✅ Better risk management and alerts
 """)
 
 st.caption(f"""
 Data: {name1} vs {name2} | Period: {periode} | Interval: {interval} | 
 Current Z-score: {current_zscore:.2f} | Correlation: {processor.pearson_corr:.3f} | 
+Hedge Quality: {hedge_eff:.1f}% | Method: {hedging_method} |
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 """)
