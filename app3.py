@@ -377,7 +377,6 @@ with st.expander("📊 Statistical Analysis", expanded=True):
             )
             fig_scatter.update_traces(marker=dict(size=8, color='blue', opacity=0.6))
             st.plotly_chart(fig_scatter, use_container_width=True)
-            
 # === IMPROVED PRACTICAL TRADING EXECUTION SECTION ===
 with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True):
     st.header("🎯 Praktische Trade Uitvoering - USDT Coin Paren")
@@ -576,73 +575,37 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
     stoploss_spread_long = spread_mean + stoploss_zscore_long * spread_std
     stoploss_spread_short = spread_mean + stoploss_zscore_short * spread_std
     
-    def calculate_realistic_price_levels(target_spread, current_price1, current_price2, hedge_ratio, alpha, asset1_name, asset2_name):
+    def calculate_price_levels_for_spread(target_spread, current_price1, current_price2, hedge_ratio):
         """
-        Berekent realistische price levels gebaseerd op asset volatiliteit
+        Calculate what individual asset prices should be for a target spread
+        More robust version that gives multiple scenarios
         """
         
-        # Bereken 7-day volatiliteit voor dynamische ranges
-        volatility1 = df['price1'].pct_change(min(7, len(df)//3)).std() * 100
-        volatility2 = df['price2'].pct_change(min(7, len(df)//3)).std() * 100
+        # Scenario 1: Price1 moves 10%, calculate required Price2
+        price1_up = current_price1 * 1.1
+        price1_down = current_price1 * 0.9
         
-        # Dynamische "stabiele beweging" ranges
-        if volatility1 < 5:
-            stable_range1 = 2.0  # ±2% voor stabiele assets
-        elif volatility1 < 15:
-            stable_range1 = 5.0  # ±5% voor normale assets
-        else:
-            stable_range1 = 10.0  # ±10% voor volatiele assets
+        price2_for_spread_up = target_spread + alpha + hedge_ratio * price1_up
+        price2_for_spread_down = target_spread + alpha + hedge_ratio * price1_down
         
-        if volatility2 < 5:
-            stable_range2 = 2.0
-        elif volatility2 < 15:
-            stable_range2 = 5.0
-        else:
-            stable_range2 = 10.0
+        # Scenario 2: Price2 moves 10%, calculate required Price1  
+        price2_up = current_price2 * 1.1
+        price2_down = current_price2 * 0.9
         
-        # Bereken price ranges voor "stabiele beweging"
-        price1_stable_low = current_price1 * (1 - stable_range1/100)
-        price1_stable_high = current_price1 * (1 + stable_range1/100)
-        price2_stable_low = current_price2 * (1 - stable_range2/100)
-        price2_stable_high = current_price2 * (1 + stable_range2/100)
-        
-        # Bereken target prices voor verschillende scenarios
-        if hedge_ratio != 0:
-            # Scenario 1: Asset1 blijft stabiel, wat moet Asset2 doen?
-            price2_needed_high = (price1_stable_high - alpha - target_spread) / hedge_ratio
-            price2_needed_low = (price1_stable_low - alpha - target_spread) / hedge_ratio
-            
-            # Scenario 2: Asset2 blijft stabiel, wat moet Asset1 doen?
-            price1_needed_high = hedge_ratio * price2_stable_high + alpha + target_spread
-            price1_needed_low = hedge_ratio * price2_stable_low + alpha + target_spread
-        else:
-            price2_needed_high = current_price2
-            price2_needed_low = current_price2
-            price1_needed_high = current_price1
-            price1_needed_low = current_price1
+        price1_for_spread_up = (price2_up - alpha - target_spread) / hedge_ratio if hedge_ratio != 0 else current_price1
+        price1_for_spread_down = (price2_down - alpha - target_spread) / hedge_ratio if hedge_ratio != 0 else current_price1
         
         return {
-            'volatility_info': {
-                'vol1': volatility1,
-                'vol2': volatility2,
-                'stable_range1': stable_range1,
-                'stable_range2': stable_range2
+            'price1_scenarios': {
+                'if_price1_up_10pct': price2_for_spread_up,
+                'if_price1_down_10pct': price2_for_spread_down
             },
-            'price_ranges': {
-                'price1_stable_range': (price1_stable_low, price1_stable_high),
-                'price2_stable_range': (price2_stable_low, price2_stable_high)
-            },
-            'target_scenarios': {
-                'if_asset1_stable': {
-                    'price1_range': f"{price1_stable_low:.6f} - {price1_stable_high:.6f}",
-                    'price2_trigger': (min(price2_needed_low, price2_needed_high), max(price2_needed_low, price2_needed_high))
-                },
-                'if_asset2_stable': {
-                    'price2_range': f"{price2_stable_low:.6f} - {price2_stable_high:.6f}",
-                    'price1_trigger': (min(price1_needed_low, price1_needed_high), max(price1_needed_low, price1_needed_high))
-                }
+            'price2_scenarios': {
+                'if_price2_up_10pct': price1_for_spread_up,
+                'if_price2_down_10pct': price1_for_spread_down
             }
         }
+    
     # === TRADING DECISION ===
     st.markdown("---")
     
@@ -698,155 +661,205 @@ with st.expander("🎯 Praktische Trade Uitvoering - USDT Paren", expanded=True)
         st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT | **Efficiency**: {(total_cost/trading_capital)*100:.1f}%")
         
         # === PRICE ALERTS VOOR LONG SPREAD ===
-        st.markdown("### 🚨 VERBETERDE PRICE ALERTS - HELDER & ACTIONABLE")
+        st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
         
-        # Bereken verbeterde scenarios
-        profit_scenarios = calculate_realistic_price_levels(
-            exit_spread_long if current_zscore <= -zscore_entry_threshold else exit_spread_short, 
-            current_price1, current_price2, beta, alpha, name1, name2
-        )
-        
-        stoploss_scenarios = calculate_realistic_price_levels(
-            stoploss_spread_long if current_zscore <= -zscore_entry_threshold else stoploss_spread_short,
-            current_price1, current_price2, beta, alpha, name1, name2
-        )
-        
-        # Toon volatiliteit context
-        vol_info = profit_scenarios['volatility_info']
-        st.info(f"""
-        **📊 VOLATILITY CONTEXT - "Stabiele beweging" betekent:**
-        - {name1}: 7-dag volatiliteit = {vol_info['vol1']:.1f}% → Stabiel = binnen ±{vol_info['stable_range1']:.1f}%
-        - {name2}: 7-dag volatiliteit = {vol_info['vol2']:.1f}% → Stabiel = binnen ±{vol_info['stable_range2']:.1f}%
-        
-        Dit is veel realistischer dan vage termen zoals "weinig beweging"!
-        """)
+        # Calculate exit price scenarios
+        profit_scenarios = calculate_price_levels_for_spread(exit_spread_long, current_price1, current_price2, beta)
+        stoploss_scenarios = calculate_price_levels_for_spread(stoploss_spread_long, current_price1, current_price2, beta)
         
         col1, col2 = st.columns(2)
         
-        if current_zscore <= -zscore_entry_threshold:  # LONG SPREAD
-            with col1:
-                st.success("#### 🎯 PROFIT TARGET ALERTS (LONG SPREAD)")
-                profit_range1 = profit_scenarios['price_ranges']['price1_stable_range']
-                profit_range2 = profit_scenarios['price_ranges']['price2_stable_range']
-                profit_trigger1 = profit_scenarios['target_scenarios']['if_asset1_stable']['price2_trigger']
-                profit_trigger2 = profit_scenarios['target_scenarios']['if_asset2_stable']['price1_trigger']
-                
-                st.markdown(f"""
-                **🎯 SIMPELSTE ALERT (AANBEVOLEN):**
-                - **Z-score stijgt naar {exit_zscore_long:.1f}** of hoger
-                
-                **📊 ALTERNATIEVE PRICE ALERTS:**
-                
-                **Scenario A: {name1} blijft stabiel**
-                - {name1} tussen {profit_range1[0]:.6f} - {profit_range1[1]:.6f} USDT (±{vol_info['stable_range1']:.1f}%)
-                - **ALERT: {name2} onder {profit_trigger1[0]:.6f} USDT**
-                
-                **Scenario B: {name2} blijft stabiel**  
-                - {name2} tussen {profit_range2[0]:.6f} - {profit_range2[1]:.6f} USDT (±{vol_info['stable_range2']:.1f}%)
-                - **ALERT: {name1} boven {profit_trigger2[1]:.6f} USDT**
-                """)
-                
-            with col2:
-                st.error("#### 🛑 STOP LOSS ALERTS (LONG SPREAD)")
-                stop_range1 = stoploss_scenarios['price_ranges']['price1_stable_range'] 
-                stop_range2 = stoploss_scenarios['price_ranges']['price2_stable_range']
-                stop_trigger1 = stoploss_scenarios['target_scenarios']['if_asset1_stable']['price2_trigger']
-                stop_trigger2 = stoploss_scenarios['target_scenarios']['if_asset2_stable']['price1_trigger']
-                
-                st.markdown(f"""
-                **🚨 EMERGENCY EXIT TRIGGERS:**
-                
-                **Z-Score Danger:**
-                - **Z-score onder {stoploss_zscore_long:.1f}** (spread divergeert verder!)
-                
-                **Price-based Exits:**
-                - **{name1} crasht onder {current_price1 * 0.85:.6f}** (-15%)
-                - **{name2} pumpt boven {current_price2 * 1.15:.6f}** (+15%)
-                - **Portfolio verlies > {max_risk_usdt:.0f} USDT**
-                
-                **Time Stop:** Na 30 dagen automatisch sluiten
-                """)
-        
-        elif current_zscore >= zscore_entry_threshold:  # SHORT SPREAD
-            with col1:
-                st.success("#### 🎯 PROFIT TARGET ALERTS (SHORT SPREAD)")
-                # Vergelijkbare code voor short spread...
-                st.markdown(f"""
-                **🎯 SIMPELSTE ALERT:**
-                - **Z-score daalt naar {exit_zscore_short:.1f}** of lager
-                
-                **📊 PRICE ALTERNATIVES:**
-                - Gebruik Z-score alert - veel betrouwbaarder voor short spreads!
-                """)
-                
-            with col2:
-                st.error("#### 🛑 STOP LOSS (SHORT SPREAD)")
-                st.markdown(f"""
-                **🚨 EMERGENCY EXITS:**
-                - **Z-score boven {stoploss_zscore_short:.1f}**
-                - **{name1} pumpt > +15%**
-                - **Portfolio loss > {max_risk_usdt:.0f} USDT**
-                """)
-        
-        
-            # === LEVERAGE OPTIMIZATION SECTION ===
-            st.markdown("---")
-            st.subheader("⚡ Leverage Optimalisatie voor Betere Hedge")
+        with col1:
+            st.success("#### 🎯 PROFIT TARGET ALERTS")
+            st.markdown(f"""
+            **Sluit LONG spread wanneer BEIDE voorwaarden:**
             
-            with st.expander("📊 Leverage Strategieën voor Ongebalanceerde Paren", expanded=False):
+            **Scenario A: Als {name1} weinig beweegt**
+            - {name1} rond {current_price1:.8f} USDT
+            - **{name2} ≤ {profit_scenarios['price1_scenarios']['if_price1_up_10pct']:.8f} USDT**
+            
+            **Scenario B: Als {name2} weinig beweegt**  
+            - {name2} rond {current_price2:.8f} USDT
+            - **{name1} ≥ {profit_scenarios['price2_scenarios']['if_price2_down_10pct']:.8f} USDT**
+            
+            **🎯 Target Z-score: {exit_zscore_long:.1f}**
+            """)
+            
+        with col2:
+            st.error("#### 🛑 STOP LOSS ALERTS")  
+            st.markdown(f"""
+            **EMERGENCY EXIT wanneer:**
+            
+            **Scenario A: Als {name1} weinig beweegt**
+            - {name1} rond {current_price1:.8f} USDT
+            - **{name2} ≥ {stoploss_scenarios['price1_scenarios']['if_price1_down_10pct']:.8f} USDT**
+            
+            **Scenario B: Als {name2} weinig beweegt**
+            - {name2} rond {current_price2:.8f} USDT  
+            - **{name1} ≤ {stoploss_scenarios['price2_scenarios']['if_price2_up_10pct']:.8f} USDT**
+            
+            **🛑 Max Verlies: -{max_risk_usdt:.2f} USDT**
+            """)
+        
+    elif current_zscore >= zscore_entry_threshold:
+        # SHORT SPREAD SIGNAL  
+        st.error(f"🔴 **VERKOOP SIGNAAL** - Z-Score: {current_zscore:.2f}")
+        
+        # Calculate balanced positions for short spread
+        shares_asset1, shares_asset2, cost_asset1, cost_asset2, ratio_diff = calculate_balanced_positions(
+            trading_capital, current_price1, current_price2, beta
+        )
+        
+        total_cost = cost_asset1 + cost_asset2
+        
+        st.markdown("### 📉 EXACTE TRADE UITVOERING:")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            #### 🔴 VERKOOP {name1} (SHORT)
+            - **Aantal**: {shares_asset1:.4f} {name1}
+            - **Huidige Prijs**: {current_price1:.8f} USDT
+            - **Totaal**: {cost_asset1:.6f} USDT
+            - **Order Type**: MARKET SELL (SHORT)
+            """)
+            
+        with col2:
+            st.markdown(f"""
+            #### 🟢 KOOP {name2}
+            - **Aantal**: {shares_asset2:.0f} {name2}
+            - **Huidige Prijs**: {current_price2:.8f} USDT
+            - **Totaal**: {cost_asset2:.6f} USDT
+            - **Order Type**: MARKET BUY
+            """)
+        
+        # Position quality check for short spread
+        position_ratio = max(cost_asset1, cost_asset2) / min(cost_asset1, cost_asset2) if min(cost_asset1, cost_asset2) > 0 else float('inf')
+        
+        if position_ratio > 5:
+            st.warning(f"""
+            ⚠️ **HEDGE RATIO ISSUE** - Positie verhouding: {position_ratio:.1f}:1
+            **Overweeg LEVERAGE** op kleinere positie voor betere hedge.
+            """)
+        
+        st.info(f"**Totaal Gebruikt**: {total_cost:.2f} USDT van {trading_capital:.2f} USDT | **Efficiency**: {(total_cost/trading_capital)*100:.1f}%")
+        
+        # === PRICE ALERTS VOOR SHORT SPREAD ===
+        st.markdown("### 🚨 STEL DEZE PRICE ALERTS IN:")
+        
+        # Calculate exit price scenarios for short spread
+        profit_scenarios_short = calculate_price_levels_for_spread(exit_spread_short, current_price1, current_price2, beta)
+        stoploss_scenarios_short = calculate_price_levels_for_spread(stoploss_spread_short, current_price1, current_price2, beta)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.success("#### 🎯 PROFIT TARGET ALERTS")
+            st.markdown(f"""
+            **Sluit SHORT spread wanneer:**
+            
+            **Scenario A: Als {name1} weinig beweegt**
+            - {name1} rond {current_price1:.8f} USDT
+            - **{name2} ≥ {profit_scenarios_short['price1_scenarios']['if_price1_down_10pct']:.8f} USDT**
+            
+            **Scenario B: Als {name2} weinig beweegt**
+            - {name2} rond {current_price2:.8f} USDT
+            - **{name1} ≤ {profit_scenarios_short['price2_scenarios']['if_price2_up_10pct']:.8f} USDT**
+            
+            **🎯 Target Z-score: {exit_zscore_short:.1f}**
+            """)
+            
+        with col2:
+            st.error("#### 🛑 STOP LOSS ALERTS")
+            st.markdown(f"""
+            **EMERGENCY EXIT wanneer:**
+            
+            **Scenario A: Als {name1} weinig beweegt**
+            - {name1} rond {current_price1:.8f} USDT
+            - **{name2} ≤ {stoploss_scenarios_short['price1_scenarios']['if_price1_up_10pct']:.8f} USDT**
+            
+            **Scenario B: Als {name2} weinig beweegt**
+            - {name2} rond {current_price2:.8f} USDT
+            - **{name1} ≥ {stoploss_scenarios_short['price2_scenarios']['if_price2_down_10pct']:.8f} USDT**
+            
+            **🛑 Max Verlies: -{max_risk_usdt:.2f} USDT**
+            """)
+        
+    else:
+        # NO SIGNAL
+        st.info(f"⏳ **GEEN SIGNAAL** - Z-Score: {current_zscore:.2f}")
+        
+        distance_to_long = abs(current_zscore - (-zscore_entry_threshold))
+        distance_to_short = abs(current_zscore - zscore_entry_threshold)
+        
+        st.markdown(f"""
+        ### ⌛ WACHT OP SIGNAAL
+        
+        **Entry Levels:**
+        - 🟢 LONG SPREAD bij Z-score ≤ -{zscore_entry_threshold:.1f} (nog {distance_to_long:.2f} punten)
+        - 🔴 SHORT SPREAD bij Z-score ≥ +{zscore_entry_threshold:.1f} (nog {distance_to_short:.2f} punten)
+        
+        **Huidige Status**: Neutrale zone, monitor prijsbeweging
+        """)
+
+    # === LEVERAGE OPTIMIZATION SECTION ===
+    st.markdown("---")
+    st.subheader("⚡ Leverage Optimalisatie voor Betere Hedge")
+    
+    with st.expander("📊 Leverage Strategieën voor Ongebalanceerde Paren", expanded=False):
+        
+        # Calculate what leverage would balance the positions
+        if trading_capital > 0:
+            test_qty1, test_qty2, test_cost1, test_cost2, test_ratio_diff = calculate_balanced_positions(
+                trading_capital, current_price1, current_price2, beta, max_position_ratio=10
+            )
+            
+            if test_cost1 > 0 and test_cost2 > 0:
+                current_ratio = max(test_cost1, test_cost2) / min(test_cost1, test_cost2)
                 
-                # Calculate what leverage would balance the positions
-                if trading_capital > 0:
-                    test_qty1, test_qty2, test_cost1, test_cost2, test_ratio_diff = calculate_balanced_positions(
-                        trading_capital, current_price1, current_price2, beta, max_position_ratio=10
-                    )
+                if current_ratio > 3:
+                    # Calculate optimal leverage
+                    smaller_cost = min(test_cost1, test_cost2)
+                    larger_cost = max(test_cost1, test_cost2)
+                    optimal_leverage = larger_cost / smaller_cost
                     
-                    if test_cost1 > 0 and test_cost2 > 0:
-                        current_ratio = max(test_cost1, test_cost2) / min(test_cost1, test_cost2)
-                        
-                        if current_ratio > 3:
-                            # Calculate optimal leverage
-                            smaller_cost = min(test_cost1, test_cost2)
-                            larger_cost = max(test_cost1, test_cost2)
-                            optimal_leverage = larger_cost / smaller_cost
-                            
-                            st.markdown(f"""
-                            ### 🎯 Leverage Aanbevelingen voor {name1} vs {name2}
-                            
-                            **Huidige situatie:**
-                            - Grotere positie: {larger_cost:.2f} USDT
-                            - Kleinere positie: {smaller_cost:.2f} USDT  
-                            - Verhouding: {current_ratio:.1f}:1
-                            
-                            **Oplossing met Leverage:**
-                            - **{optimal_leverage:.1f}x leverage** op kleinere positie
-                            - Dit geeft balans van ~1:1 in dollar termen
-                            - **Futures/Margin trading** vereist
-                            
-                            **Alternatieve Strategieën:**
-                            1. **ETFs gebruiken** (bijv. crypto ETFs met balans)
-                            2. **Hoger capital** (minimaal €{int(trading_capital * 3)})
-                            3. **Andere paren kiezen** met natuurlijke balans
-                            4. **Opties strategies** voor capital efficiency
-                            """)
-                            
-                            # Show leverage calculation
-                            leveraged_cost = smaller_cost * optimal_leverage
-                            st.success(f"""
-                            **Met {optimal_leverage:.1f}x Leverage:**
-                            - Kleinere positie wordt: {leveraged_cost:.2f} USDT
-                            - Nieuwe verhouding: ~1:1 (perfect gebalanceerd)
-                            - **Margin vereist**: {leveraged_cost - smaller_cost:.2f} USDT extra
-                            """)
-                            
-                        else:
-                            st.success(f"""
-                            ✅ **GOED GEBALANCEERD PAAR**
-                            
-                            Verhouding {current_ratio:.1f}:1 is acceptabel voor pairs trading.
-                            Geen leverage optimalisatie nodig.
-                            """)
-            
+                    st.markdown(f"""
+                    ### 🎯 Leverage Aanbevelingen voor {name1} vs {name2}
+                    
+                    **Huidige situatie:**
+                    - Grotere positie: {larger_cost:.2f} USDT
+                    - Kleinere positie: {smaller_cost:.2f} USDT  
+                    - Verhouding: {current_ratio:.1f}:1
+                    
+                    **Oplossing met Leverage:**
+                    - **{optimal_leverage:.1f}x leverage** op kleinere positie
+                    - Dit geeft balans van ~1:1 in dollar termen
+                    - **Futures/Margin trading** vereist
+                    
+                    **Alternatieve Strategieën:**
+                    1. **ETFs gebruiken** (bijv. crypto ETFs met balans)
+                    2. **Hoger capital** (minimaal €{int(trading_capital * 3)})
+                    3. **Andere paren kiezen** met natuurlijke balans
+                    4. **Opties strategies** voor capital efficiency
+                    """)
+                    
+                    # Show leverage calculation
+                    leveraged_cost = smaller_cost * optimal_leverage
+                    st.success(f"""
+                    **Met {optimal_leverage:.1f}x Leverage:**
+                    - Kleinere positie wordt: {leveraged_cost:.2f} USDT
+                    - Nieuwe verhouding: ~1:1 (perfect gebalanceerd)
+                    - **Margin vereist**: {leveraged_cost - smaller_cost:.2f} USDT extra
+                    """)
+                    
+                else:
+                    st.success(f"""
+                    ✅ **GOED GEBALANCEERD PAAR**
+                    
+                    Verhouding {current_ratio:.1f}:1 is acceptabel voor pairs trading.
+                    Geen leverage optimalisatie nodig.
+                    """)
+    
     # === EXCHANGE SPECIFIC INSTRUCTIONS ===
     st.markdown("---")
     st.subheader("🏪 Exchange Uitvoering (Binance/Bybit/etc)")
