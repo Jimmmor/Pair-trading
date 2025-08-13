@@ -107,58 +107,40 @@ class MLPairsTradingSystem:
         """Load cryptocurrency data using imported tickers"""
         return load_crypto_data(symbol, period)
     
-    def calculate_spread_and_zscore(self, price1, price2, zscore_window=20, hedge_method='dollar_neutral'):
-        """
-        Calculate the spread between two price series and its rolling z-score.
-        Automatically fixes data to be valid Pandas Series.
-        """
-        import pandas as pd
-        import numpy as np
     
-        # --- FIX 1: Force to Pandas Series with index ---
+    def calculate_spread_and_zscore(self, price1, price2, zscore_window=30, hedge_method='dollar_neutral'):
+        # Zorg dat inputs Series zijn met dezelfde index
         if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1, index=range(len(price1)))
+            price1 = pd.Series(price1)
         if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2, index=range(len(price2)))
+            price2 = pd.Series(price2)
     
-        # --- FIX 2: Align on common index to avoid shape errors ---
+        # Align op index, voor zekerheid
         price1, price2 = price1.align(price2, join='inner')
     
-        # --- FIX 3: Handle missing values ---
-        if price1.isnull().any() or price2.isnull().any():
-            price1 = price1.fillna(method='ffill').fillna(method='bfill')
-            price2 = price2.fillna(method='ffill').fillna(method='bfill')
-    
-        # --- Hedge ratio calculation ---
+        # Bereken hedge ratio
         if hedge_method == 'dollar_neutral':
             hedge_ratio = 1.0
         elif hedge_method == 'regression':
-            # Simple linear regression for hedge ratio
-            X = np.vstack([price2.values, np.ones(len(price2))]).T
-            hedge_ratio, _ = np.linalg.lstsq(X, price1.values, rcond=None)[0]
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression().fit(price2.values.reshape(-1, 1), price1.values)
+            hedge_ratio = model.coef_[0]
         else:
             raise ValueError(f"Unknown hedge method: {hedge_method}")
     
-        # --- Spread calculation ---
+        # Bereken spread en zscore
         spread = price1 - hedge_ratio * price2
+        zscore = (spread - spread.rolling(window=zscore_window).mean()) / spread.rolling(window=zscore_window).std()
     
-        # --- Z-score calculation ---
-        rolling_mean = spread.rolling(window=zscore_window).mean()
-        rolling_std = spread.rolling(window=zscore_window).std()
-        zscore = (spread - rolling_mean) / rolling_std
-    
-        # --- Return DataFrame with results ---
+        # Maak DataFrame mét index
         df = pd.DataFrame({
-       'price1': price1.values,
-       'price2': price2.values,
-       'spread': spread.values,
-       'zscore': zscore.values
-       }, index=price1.index)
-
-
-
+            'price1': price1.values,
+            'price2': price2.values,
+            'spread': spread.values,
+            'zscore': zscore.values
+        }, index=price1.index)
+    
         return df, hedge_ratio
-
 
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
