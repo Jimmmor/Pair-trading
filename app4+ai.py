@@ -148,12 +148,14 @@ class MLPairsTradingSystem:
         zscore = (spread - rolling_mean) / rolling_std
     
         # --- Return DataFrame with results ---
-       df = pd.DataFrame({
-    'price1': price1.values,
-    'price2': price2.values,
-    'spread': spread.values,
-    'zscore': zscore.values
-}, index=price1.index)
+        df = pd.DataFrame({
+       'price1': price1.values,
+       'price2': price2.values,
+       'spread': spread.values,
+       'zscore': zscore.values
+       }, index=price1.index)
+
+
 
         return df, hedge_ratio
 
