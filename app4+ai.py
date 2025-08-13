@@ -98,7 +98,7 @@ class MLPairsTradingSystem:
         # Calculate rolling Z-score
         df['spread_mean'] = df['spread'].rolling(zscore_window).mean()
         df['spread_std'] = df['spread'].rolling(zscore_window).std()
-        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std'
+        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std']
         
         return df, hedge_ratio
     
