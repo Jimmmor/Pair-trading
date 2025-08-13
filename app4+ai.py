@@ -106,55 +106,48 @@ class MLPairsTradingSystem:
     def load_data(self, symbol, period='1y'):
         """Load cryptocurrency data using imported tickers"""
         return load_crypto_data(symbol, period)
-    
-    def calculate_spread_and_zscore(self, price1, price2, zscore_window=20, hedge_method='dollar_neutral'):
-        """Calculate spread and z-score with different hedge methods"""
-        # Ensure we have pandas Series, not scalar values
+        
+    def calculate_spread_and_zscore(self, price1, price2, zscore_window=30):
+        # Zorg dat inputs Pandas Series zijn
         if not isinstance(price1, pd.Series):
             if isinstance(price1, (int, float)):
-                raise ValueError("Cannot calculate spread from single price points. Need historical data.")
+                raise ValueError("price1 moet een tijdreeks zijn, geen enkele waarde.")
             price1 = pd.Series(price1)
-        
+    
         if not isinstance(price2, pd.Series):
             if isinstance(price2, (int, float)):
-                raise ValueError("Cannot calculate spread from single price points. Need historical data.")
+                raise ValueError("price2 moet een tijdreeks zijn, geen enkele waarde.")
             price2 = pd.Series(price2)
-        
-        # Align data by index
+    
+        # Align data op gemeenschappelijke index
         common_index = price1.index.intersection(price2.index)
-        if len(common_index) == 0:
-            raise ValueError("No common dates found between the two price series")
-        
+        if len(common_index) < zscore_window:
+            raise ValueError(
+                f"Niet genoeg overlappende data: {len(common_index)} punten gevonden, "
+                f"maar {zscore_window} nodig voor de z-score berekening."
+            )
+    
         price1_aligned = price1.loc[common_index]
         price2_aligned = price2.loc[common_index]
-        
-        # Create DataFrame with aligned data
-        df = pd.DataFrame({
-            'price1': price1_aligned, 
-            'price2': price2_aligned
-        }).dropna()
-        
-        if len(df) < zscore_window:
-            raise ValueError(f"Not enough data points. Need at least {zscore_window} points, got {len(df)}")
-        
-        if hedge_method == 'regression':
-            # Regression-based hedge ratio
-            X = df['price1'].values.reshape(-1, 1)
-            y = df['price2'].values
-            model = LinearRegression().fit(X, y)
-            hedge_ratio = model.coef_[0]
-            df['spread'] = df['price1'] - hedge_ratio * df['price2']
-        else:
-            # Dollar-neutral (simple ratio)
-            df['spread'] = df['price1'] / df['price2']
-            hedge_ratio = 1.0
-        
-        # Calculate rolling Z-score
-        df['spread_mean'] = df['spread'].rolling(zscore_window).mean()
-        df['spread_std'] = df['spread'].rolling(zscore_window).std()
-        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std']
-        
-        return df, hedge_ratio
+    
+        # Bereken spread
+        spread = price1_aligned - price2_aligned
+    
+        # Bereken z-score
+        rolling_mean = spread.rolling(window=zscore_window).mean()
+        rolling_std = spread.rolling(window=zscore_window).std()
+        zscore = (spread - rolling_mean) / rolling_std
+    
+        # Bouw DataFrame (nu altijd met Series, geen scalars)
+        spread_df = pd.DataFrame({
+            'price1': price1_aligned,
+            'price2': price2_aligned,
+            'spread': spread,
+            'zscore': zscore
+        })
+    
+        return spread_df
+
     
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
