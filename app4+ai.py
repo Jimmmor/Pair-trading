@@ -54,6 +54,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Move the cached function outside of the class
+@st.cache_data
+def load_crypto_data(symbol, period='1y'):
+    """Load cryptocurrency data using imported tickers"""
+    try:
+        # Use the imported tickers dictionary
+        ticker_symbol = tickers.get(symbol, symbol)
+        data = yf.download(ticker_symbol, period=period, progress=False)['Close']
+        return data.dropna()
+    except Exception as e:
+        st.error(f"Error loading {symbol}: {str(e)}")
+        return pd.Series()
+
 class MLPairsTradingSystem:
     """Advanced ML-Optimized Pairs Trading System"""
     
@@ -61,17 +74,9 @@ class MLPairsTradingSystem:
         self.optimal_params = {}
         self.best_performance = None
         
-    @st.cache_data
-    def load_data(_self, symbol, period='1y'):
+    def load_data(self, symbol, period='1y'):
         """Load cryptocurrency data using imported tickers"""
-        try:
-            # Use the imported tickers dictionary
-            ticker_symbol = tickers.get(symbol, symbol)
-            data = yf.download(ticker_symbol, period=period, progress=False)['Close']
-            return data.dropna()
-        except Exception as e:
-            st.error(f"Error loading {symbol}: {str(e)}")
-            return pd.Series()
+        return load_crypto_data(symbol, period)
     
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=20, hedge_method='dollar_neutral'):
         """Calculate spread and z-score with different hedge methods"""
@@ -93,7 +98,7 @@ class MLPairsTradingSystem:
         # Calculate rolling Z-score
         df['spread_mean'] = df['spread'].rolling(zscore_window).mean()
         df['spread_std'] = df['spread'].rolling(zscore_window).std()
-        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std']
+        df['zscore'] = (df['spread'] - df['spread_mean']) / df['spread_std'
         
         return df, hedge_ratio
     
@@ -320,12 +325,15 @@ class MLPairsTradingSystem:
         
         return best_params, pd.DataFrame(results)
 
-# Initialize the system
-@st.cache_resource
+# Initialize the system (removed @st.cache_resource decorator as it can cause issues)
 def get_trading_system():
     return MLPairsTradingSystem()
 
-trading_system = get_trading_system()
+# Initialize session state to store the trading system
+if 'trading_system' not in st.session_state:
+    st.session_state.trading_system = get_trading_system()
+
+trading_system = st.session_state.trading_system
 
 # Main App Interface
 st.title("🤖 AI-Powered Pairs Trading System")
@@ -350,92 +358,102 @@ with tab1:
     
     # Load data
     if st.button("🚀 Analyze Pair & Optimize with AI", type="primary"):
-        with st.spinner("Loading market data..."):
-            price1 = trading_system.load_data(crypto1)
-            price2 = trading_system.load_data(crypto2)
-        
-        if not price1.empty and not price2.empty:
-            # Run ML optimization
-            optimal_params, all_results = trading_system.optimize_parameters(
-                price1, price2, timeframe_days
-            )
+        try:
+            with st.spinner("Loading market data..."):
+                price1 = trading_system.load_data(crypto1)
+                price2 = trading_system.load_data(crypto2)
             
-            # Display results
-            st.success("✅ AI Optimization Complete!")
-            
-            # Show optimal parameters
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Optimal Entry Z-Score", f"±{optimal_params['entry_zscore']:.1f}")
-                st.metric("Optimal Exit Z-Score", f"±{optimal_params['exit_zscore']:.1f}")
-            with col2:
-                st.metric("Best Leverage", f"{optimal_params['leverage']}x")
-                st.metric("Hedge Method", optimal_params['hedge_method'].replace('_', ' ').title())
-            with col3:
-                st.metric("Stop Loss", f"{optimal_params['stop_loss_pct']}%")
-                st.metric("Take Profit", f"{optimal_params['take_profit_pct']}%")
-            with col4:
-                st.metric("Expected Return", f"{trading_system.best_performance['total_return']:.1f}%")
-                st.metric("Win Rate", f"{trading_system.best_performance['win_rate']:.1f}%")
-            
-            # Create visualizations
-            df, _ = trading_system.calculate_spread_and_zscore(
-                price1, price2, 
-                optimal_params['zscore_window'], 
-                optimal_params['hedge_method']
-            )
-            
-            # Price chart with trading zones
-            fig = go.Figure()
-            
-            # Add price lines
-            fig.add_trace(go.Scatter(x=df.index, y=df['price1'], name=f'{crypto1} Price', 
-                                   line=dict(color='blue')))
-            fig.add_trace(go.Scatter(x=df.index, y=df['price2'], name=f'{crypto2} Price', 
-                                   line=dict(color='red'), yaxis='y2'))
-            
-            fig.update_layout(
-                title=f"{crypto1} vs {crypto2} - Price Movement",
-                xaxis_title="Date",
-                yaxis_title=f"{crypto1} Price (USD)",
-                yaxis2=dict(title=f"{crypto2} Price (USD)", overlaying='y', side='right'),
-                height=400
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Z-score chart with optimal entry/exit levels
-            fig_zscore = go.Figure()
-            fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-Score',
-                                          line=dict(color='green', width=2)))
-            
-            # Add optimal trading thresholds
-            fig_zscore.add_hline(y=optimal_params['entry_zscore'], line_dash="dash", 
-                               line_color="red", annotation_text="Short Entry")
-            fig_zscore.add_hline(y=-optimal_params['entry_zscore'], line_dash="dash", 
-                               line_color="blue", annotation_text="Long Entry")
-            fig_zscore.add_hline(y=optimal_params['exit_zscore'], line_dash="dot", 
-                               line_color="purple", annotation_text="Exit Zone")
-            fig_zscore.add_hline(y=-optimal_params['exit_zscore'], line_dash="dot", 
-                               line_color="purple", annotation_text="Exit Zone")
-            fig_zscore.add_hline(y=0, line_color="black", line_width=1)
-            
-            fig_zscore.update_layout(
-                title="Z-Score with Optimal Entry/Exit Levels",
-                xaxis_title="Date",
-                yaxis_title="Z-Score",
-                height=400
-            )
-            
-            st.plotly_chart(fig_zscore, use_container_width=True)
-            
-            # Performance comparison table
-            st.subheader("🏆 Top 10 Parameter Combinations")
-            top_results = all_results.nlargest(10, 'total_return')[
-                ['entry_zscore', 'exit_zscore', 'leverage', 'hedge_method', 
-                 'total_return', 'win_rate', 'num_trades', 'max_drawdown']
-            ]
-            st.dataframe(top_results.round(2), use_container_width=True)
+            if not price1.empty and not price2.empty:
+                st.success(f"✅ Data loaded successfully! {crypto1}: {len(price1)} points, {crypto2}: {len(price2)} points")
+                
+                # Run ML optimization
+                with st.spinner("Running AI optimization..."):
+                    optimal_params, all_results = trading_system.optimize_parameters(
+                        price1, price2, timeframe_days
+                    )
+                
+                # Display results
+                st.success("✅ AI Optimization Complete!")
+                
+                # Show optimal parameters
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Optimal Entry Z-Score", f"±{optimal_params['entry_zscore']:.1f}")
+                    st.metric("Optimal Exit Z-Score", f"±{optimal_params['exit_zscore']:.1f}")
+                with col2:
+                    st.metric("Best Leverage", f"{optimal_params['leverage']}x")
+                    st.metric("Hedge Method", optimal_params['hedge_method'].replace('_', ' ').title())
+                with col3:
+                    st.metric("Stop Loss", f"{optimal_params['stop_loss_pct']}%")
+                    st.metric("Take Profit", f"{optimal_params['take_profit_pct']}%")
+                with col4:
+                    st.metric("Expected Return", f"{trading_system.best_performance['total_return']:.1f}%")
+                    st.metric("Win Rate", f"{trading_system.best_performance['win_rate']:.1f}%")
+                
+                # Create visualizations
+                df, _ = trading_system.calculate_spread_and_zscore(
+                    price1, price2, 
+                    optimal_params['zscore_window'], 
+                    optimal_params['hedge_method']
+                )
+                
+                # Price chart with trading zones
+                fig = go.Figure()
+                
+                # Add price lines
+                fig.add_trace(go.Scatter(x=df.index, y=df['price1'], name=f'{crypto1} Price', 
+                                       line=dict(color='blue')))
+                fig.add_trace(go.Scatter(x=df.index, y=df['price2'], name=f'{crypto2} Price', 
+                                       line=dict(color='red'), yaxis='y2'))
+                
+                fig.update_layout(
+                    title=f"{crypto1} vs {crypto2} - Price Movement",
+                    xaxis_title="Date",
+                    yaxis_title=f"{crypto1} Price (USD)",
+                    yaxis2=dict(title=f"{crypto2} Price (USD)", overlaying='y', side='right'),
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Z-score chart with optimal entry/exit levels
+                fig_zscore = go.Figure()
+                fig_zscore.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-Score',
+                                              line=dict(color='green', width=2)))
+                
+                # Add optimal trading thresholds
+                fig_zscore.add_hline(y=optimal_params['entry_zscore'], line_dash="dash", 
+                                   line_color="red", annotation_text="Short Entry")
+                fig_zscore.add_hline(y=-optimal_params['entry_zscore'], line_dash="dash", 
+                                   line_color="blue", annotation_text="Long Entry")
+                fig_zscore.add_hline(y=optimal_params['exit_zscore'], line_dash="dot", 
+                                   line_color="purple", annotation_text="Exit Zone")
+                fig_zscore.add_hline(y=-optimal_params['exit_zscore'], line_dash="dot", 
+                                   line_color="purple", annotation_text="Exit Zone")
+                fig_zscore.add_hline(y=0, line_color="black", line_width=1)
+                
+                fig_zscore.update_layout(
+                    title="Z-Score with Optimal Entry/Exit Levels",
+                    xaxis_title="Date",
+                    yaxis_title="Z-Score",
+                    height=400
+                )
+                
+                st.plotly_chart(fig_zscore, use_container_width=True)
+                
+                # Performance comparison table
+                st.subheader("🏆 Top 10 Parameter Combinations")
+                top_results = all_results.nlargest(10, 'total_return')[
+                    ['entry_zscore', 'exit_zscore', 'leverage', 'hedge_method', 
+                     'total_return', 'win_rate', 'num_trades', 'max_drawdown']
+                ]
+                st.dataframe(top_results.round(2), use_container_width=True)
+            else:
+                st.error("❌ Failed to load data for one or both cryptocurrencies!")
+                
+        except Exception as e:
+            st.error(f"❌ An error occurred: {str(e)}")
+            st.exception(e)  # This will show the full traceback for debugging
 
 # Tab 2: Live Trading Signals
 with tab2:
@@ -850,35 +868,7 @@ with st.sidebar:
             else:
                 st.info("⏳ No Signal")
     
-    st.markdown("---")
-    st.header("📚 Trading Tips")
-    st.info("""
-    **Pairs Trading Basics:**
-    - Trade relative price movements
-    - Market neutral strategy
-    - Profit from mean reversion
-    - Lower correlation = higher risk
     
-    **Risk Management:**
-    - Never risk more than 2-5% per trade
-    - Use stop losses religiously
-    - Monitor correlation daily
-    - Start with low leverage
-    """)
-    
-    st.markdown("---")
-    st.header("⚠️ Disclaimer")
-    st.error("""
-    **HIGH RISK TRADING**
-    
-    This system is for educational purposes. 
-    Cryptocurrency trading involves substantial 
-    risk of loss. Past performance does not 
-    guarantee future results.
-    
-    **Trade at your own risk.**
-    """)
-
 # Footer
 st.markdown("---")
 st.markdown("""
