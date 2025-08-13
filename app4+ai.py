@@ -110,35 +110,36 @@ class MLPairsTradingSystem:
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=30):
         # Zorg dat inputs Pandas Series zijn
         if not isinstance(price1, pd.Series):
-            if isinstance(price1, (int, float)):
-                raise ValueError("price1 moet een tijdreeks zijn, geen enkele waarde.")
             price1 = pd.Series(price1)
-    
         if not isinstance(price2, pd.Series):
-            if isinstance(price2, (int, float)):
-                raise ValueError("price2 moet een tijdreeks zijn, geen enkele waarde.")
             price2 = pd.Series(price2)
+    
+        # Vroege check: genoeg data in beide series
+        if len(price1) < 2 or len(price2) < 2:
+            raise ValueError(f"Te weinig data: price1={len(price1)}, price2={len(price2)}")
     
         # Align data op gemeenschappelijke index
         common_index = price1.index.intersection(price2.index)
-        if len(common_index) < zscore_window:
-            raise ValueError(
-                f"Niet genoeg overlappende data: {len(common_index)} punten gevonden, "
-                f"maar {zscore_window} nodig voor de z-score berekening."
-            )
+        if len(common_index) < 2:
+            raise ValueError("Te weinig overlappende datapunten na alignen.")
     
         price1_aligned = price1.loc[common_index]
         price2_aligned = price2.loc[common_index]
     
-        # Bereken spread
-        spread = price1_aligned - price2_aligned
+        # Nog een check: genoeg punten voor zscore_window
+        if len(price1_aligned) < zscore_window:
+            raise ValueError(
+                f"Niet genoeg overlappende data: {len(price1_aligned)} punten, "
+                f"{zscore_window} nodig voor z-score."
+            )
     
-        # Bereken z-score
+        # Bereken spread en z-score
+        spread = price1_aligned - price2_aligned
         rolling_mean = spread.rolling(window=zscore_window).mean()
         rolling_std = spread.rolling(window=zscore_window).std()
         zscore = (spread - rolling_mean) / rolling_std
     
-        # Bouw DataFrame (nu altijd met Series, geen scalars)
+        # Bouw DataFrame
         spread_df = pd.DataFrame({
             'price1': price1_aligned,
             'price2': price2_aligned,
@@ -148,7 +149,6 @@ class MLPairsTradingSystem:
     
         return spread_df
 
-    
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
         """Comprehensive backtesting with realistic trading costs"""
