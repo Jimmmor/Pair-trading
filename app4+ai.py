@@ -80,8 +80,33 @@ class MLPairsTradingSystem:
     
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=20, hedge_method='dollar_neutral'):
         """Calculate spread and z-score with different hedge methods"""
-        # Align data
-        df = pd.DataFrame({'price1': price1, 'price2': price2}).dropna()
+        # Ensure we have pandas Series, not scalar values
+        if not isinstance(price1, pd.Series):
+            if isinstance(price1, (int, float)):
+                raise ValueError("Cannot calculate spread from single price points. Need historical data.")
+            price1 = pd.Series(price1)
+        
+        if not isinstance(price2, pd.Series):
+            if isinstance(price2, (int, float)):
+                raise ValueError("Cannot calculate spread from single price points. Need historical data.")
+            price2 = pd.Series(price2)
+        
+        # Align data by index
+        common_index = price1.index.intersection(price2.index)
+        if len(common_index) == 0:
+            raise ValueError("No common dates found between the two price series")
+        
+        price1_aligned = price1.loc[common_index]
+        price2_aligned = price2.loc[common_index]
+        
+        # Create DataFrame with aligned data
+        df = pd.DataFrame({
+            'price1': price1_aligned, 
+            'price2': price2_aligned
+        }).dropna()
+        
+        if len(df) < zscore_window:
+            raise ValueError(f"Not enough data points. Need at least {zscore_window} points, got {len(df)}")
         
         if hedge_method == 'regression':
             # Regression-based hedge ratio
@@ -236,6 +261,11 @@ class MLPairsTradingSystem:
     
     def optimize_parameters(self, price1, price2, trading_timeframe_days=30):
         """ML-powered parameter optimization"""
+        
+        # Validate inputs
+        if len(price1) < 50 or len(price2) < 50:
+            raise ValueError("Insufficient data for optimization. Need at least 50 data points.")
+        
         st.info("🤖 AI is optimizing parameters for maximum profit...")
         
         # Define parameter grid based on trading timeframe
@@ -280,45 +310,54 @@ class MLPairsTradingSystem:
         status_text = st.empty()
         
         for i, params in enumerate(param_combinations[:50]):  # Limit to 50 combinations for speed
-            # Calculate spread and z-score
-            df, hedge_ratio = self.calculate_spread_and_zscore(
-                price1, price2, 
-                zscore_window=params['zscore_window'],
-                hedge_method=params['hedge_method']
-            )
-            
-            # Backtest with current parameters
-            results_dict = self.backtest_strategy(
-                df, 
-                entry_zscore=params['entry_zscore'],
-                exit_zscore=params['exit_zscore'],
-                stop_loss_pct=params['stop_loss_pct'],
-                take_profit_pct=params['take_profit_pct'],
-                leverage=params['leverage'],
-                max_hold_days=trading_timeframe_days
-            )
-            
-            # Scoring function (weighted combination of metrics)
-            score = (
-                results_dict['total_return'] * 0.4 +
-                results_dict['win_rate'] * 0.3 +
-                results_dict['sharpe_ratio'] * 20 * 0.2 +
-                (100 - results_dict['max_drawdown']) * 0.1
-            )
-            
-            results.append({**params, **results_dict, 'score': score})
-            
-            if score > best_score and results_dict['num_trades'] >= 3:
-                best_score = score
-                best_params = params.copy()
-                best_params['hedge_ratio'] = hedge_ratio
-            
-            # Update progress
-            progress_bar.progress((i + 1) / min(50, len(param_combinations)))
-            status_text.text(f"Testing combination {i+1}/{min(50, len(param_combinations))} - Best return: {results_dict['total_return']:.2f}%")
+            try:
+                # Calculate spread and z-score
+                df, hedge_ratio = self.calculate_spread_and_zscore(
+                    price1, price2, 
+                    zscore_window=params['zscore_window'],
+                    hedge_method=params['hedge_method']
+                )
+                
+                # Backtest with current parameters
+                results_dict = self.backtest_strategy(
+                    df, 
+                    entry_zscore=params['entry_zscore'],
+                    exit_zscore=params['exit_zscore'],
+                    stop_loss_pct=params['stop_loss_pct'],
+                    take_profit_pct=params['take_profit_pct'],
+                    leverage=params['leverage'],
+                    max_hold_days=trading_timeframe_days
+                )
+                
+                # Scoring function (weighted combination of metrics)
+                score = (
+                    results_dict['total_return'] * 0.4 +
+                    results_dict['win_rate'] * 0.3 +
+                    results_dict['sharpe_ratio'] * 20 * 0.2 +
+                    (100 - results_dict['max_drawdown']) * 0.1
+                )
+                
+                results.append({**params, **results_dict, 'score': score})
+                
+                if score > best_score and results_dict['num_trades'] >= 3:
+                    best_score = score
+                    best_params = params.copy()
+                    best_params['hedge_ratio'] = hedge_ratio
+                
+                # Update progress
+                progress_bar.progress((i + 1) / min(50, len(param_combinations)))
+                status_text.text(f"Testing combination {i+1}/{min(50, len(param_combinations))} - Best return: {results_dict['total_return']:.2f}%")
+                
+            except Exception as e:
+                # Skip this parameter combination if it fails
+                st.warning(f"Skipping parameter combination due to error: {str(e)}")
+                continue
         
         progress_bar.empty()
         status_text.empty()
+        
+        if best_params is None:
+            raise ValueError("No valid parameter combinations found. Check your data quality.")
         
         self.optimal_params = best_params
         self.best_performance = [r for r in results if r['score'] == best_score][0]
