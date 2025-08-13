@@ -109,16 +109,23 @@ class MLPairsTradingSystem:
     
     
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=30, hedge_method='dollar_neutral'):
-        # Zorg dat inputs Series zijn met dezelfde index
-        if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1)
-        if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2)
+        import pandas as pd
+        import numpy as np
     
-        # Align op index, voor zekerheid
+        # Als het een DataFrame is, pak de eerste kolom
+        if isinstance(price1, pd.DataFrame):
+            price1 = price1.iloc[:, 0]
+        if isinstance(price2, pd.DataFrame):
+            price2 = price2.iloc[:, 0]
+    
+        # Zorg dat beide Series zijn
+        price1 = pd.Series(price1).dropna()
+        price2 = pd.Series(price2).dropna()
+    
+        # Align op index
         price1, price2 = price1.align(price2, join='inner')
     
-        # Bereken hedge ratio
+        # Hedge ratio berekenen
         if hedge_method == 'dollar_neutral':
             hedge_ratio = 1.0
         elif hedge_method == 'regression':
@@ -128,19 +135,19 @@ class MLPairsTradingSystem:
         else:
             raise ValueError(f"Unknown hedge method: {hedge_method}")
     
-        # Bereken spread en zscore
+        # Spread en zscore
         spread = price1 - hedge_ratio * price2
         zscore = (spread - spread.rolling(window=zscore_window).mean()) / spread.rolling(window=zscore_window).std()
     
-        # Maak DataFrame mét index
         df = pd.DataFrame({
-            'price1': price1.values,
-            'price2': price2.values,
-            'spread': spread.values,
-            'zscore': zscore.values
+            'price1': price1,
+            'price2': price2,
+            'spread': spread,
+            'zscore': zscore
         }, index=price1.index)
     
         return df, hedge_ratio
+
 
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
