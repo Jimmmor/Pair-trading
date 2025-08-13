@@ -106,48 +106,57 @@ class MLPairsTradingSystem:
     def load_data(self, symbol, period='1y'):
         """Load cryptocurrency data using imported tickers"""
         return load_crypto_data(symbol, period)
-        
-    def calculate_spread_and_zscore(self, price1, price2, zscore_window=30):
-        # Zorg dat inputs Pandas Series zijn
+    
+    def calculate_spread_and_zscore(self, price1, price2, zscore_window=20, hedge_method='dollar_neutral'):
+        """
+        Calculate the spread between two price series and its rolling z-score.
+        Automatically fixes data to be valid Pandas Series.
+        """
+        import pandas as pd
+        import numpy as np
+    
+        # --- FIX 1: Force to Pandas Series with index ---
         if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1)
+            price1 = pd.Series(price1, index=range(len(price1)))
         if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2)
+            price2 = pd.Series(price2, index=range(len(price2)))
     
-        # Vroege check: genoeg data in beide series
-        if len(price1) < 2 or len(price2) < 2:
-            raise ValueError(f"Te weinig data: price1={len(price1)}, price2={len(price2)}")
+        # --- FIX 2: Align on common index to avoid shape errors ---
+        price1, price2 = price1.align(price2, join='inner')
     
-        # Align data op gemeenschappelijke index
-        common_index = price1.index.intersection(price2.index)
-        if len(common_index) < 2:
-            raise ValueError("Te weinig overlappende datapunten na alignen.")
+        # --- FIX 3: Handle missing values ---
+        if price1.isnull().any() or price2.isnull().any():
+            price1 = price1.fillna(method='ffill').fillna(method='bfill')
+            price2 = price2.fillna(method='ffill').fillna(method='bfill')
     
-        price1_aligned = price1.loc[common_index]
-        price2_aligned = price2.loc[common_index]
+        # --- Hedge ratio calculation ---
+        if hedge_method == 'dollar_neutral':
+            hedge_ratio = 1.0
+        elif hedge_method == 'regression':
+            # Simple linear regression for hedge ratio
+            X = np.vstack([price2.values, np.ones(len(price2))]).T
+            hedge_ratio, _ = np.linalg.lstsq(X, price1.values, rcond=None)[0]
+        else:
+            raise ValueError(f"Unknown hedge method: {hedge_method}")
     
-        # Nog een check: genoeg punten voor zscore_window
-        if len(price1_aligned) < zscore_window:
-            raise ValueError(
-                f"Niet genoeg overlappende data: {len(price1_aligned)} punten, "
-                f"{zscore_window} nodig voor z-score."
-            )
+        # --- Spread calculation ---
+        spread = price1 - hedge_ratio * price2
     
-        # Bereken spread en z-score
-        spread = price1_aligned - price2_aligned
+        # --- Z-score calculation ---
         rolling_mean = spread.rolling(window=zscore_window).mean()
         rolling_std = spread.rolling(window=zscore_window).std()
         zscore = (spread - rolling_mean) / rolling_std
     
-        # Bouw DataFrame
-        spread_df = pd.DataFrame({
-            'price1': price1_aligned,
-            'price2': price2_aligned,
+        # --- Return DataFrame with results ---
+        df = pd.DataFrame({
+            'price1': price1,
+            'price2': price2,
             'spread': spread,
             'zscore': zscore
         })
     
-        return spread_df
+        return df, hedge_ratio
+
 
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
@@ -282,7 +291,13 @@ class MLPairsTradingSystem:
         return (returns.mean() / returns.std()) * np.sqrt(252)
     
     def optimize_parameters(self, price1, price2, trading_timeframe_days=30):
-        """ML-powered parameter optimization"""
+        """ML-powered parameter optimization (robuust gemaakt)"""
+        
+        # ---- FIX: altijd Series met index maken ----
+        if not isinstance(price1, pd.Series):
+            price1 = pd.Series(price1, index=range(len(price1)))
+        if not isinstance(price2, pd.Series):
+            price2 = pd.Series(price2, index=range(len(price2)))
         
         # Validate inputs
         if len(price1) < 50 or len(price2) < 50:
@@ -368,11 +383,17 @@ class MLPairsTradingSystem:
                 
                 # Update progress
                 progress_bar.progress((i + 1) / min(50, len(param_combinations)))
-                status_text.text(f"Testing combination {i+1}/{min(50, len(param_combinations))} - Best return: {results_dict['total_return']:.2f}%")
+                status_text.text(
+                    f"Testing combination {i+1}/{min(50, len(param_combinations))} "
+                    f"- Best return: {results_dict['total_return']:.2f}%"
+                )
                 
             except Exception as e:
                 # Skip this parameter combination if it fails
-                st.warning(f"Skipping parameter combination due to error: {str(e)}")
+                st.warning(
+                    f"Skipping parameter combination due to error: {str(e)} "
+                    f"(params: {params})"
+                )
                 continue
         
         progress_bar.empty()
@@ -385,6 +406,7 @@ class MLPairsTradingSystem:
         self.best_performance = [r for r in results if r['score'] == best_score][0]
         
         return best_params, pd.DataFrame(results)
+
 
 # Initialize the system (removed @st.cache_resource decorator as it can cause issues)
 def get_trading_system():
