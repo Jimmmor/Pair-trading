@@ -868,7 +868,35 @@ with st.sidebar:
             else:
                 st.info("⏳ No Signal")
     
+    st.markdown("---")
+    st.header("📚 Trading Tips")
+    st.info("""
+    **Pairs Trading Basics:**
+    - Trade relative price movements
+    - Market neutral strategy
+    - Profit from mean reversion
+    - Lower correlation = higher risk
     
+    **Risk Management:**
+    - Never risk more than 2-5% per trade
+    - Use stop losses religiously
+    - Monitor correlation daily
+    - Start with low leverage
+    """)
+    
+    st.markdown("---")
+    st.header("⚠️ Disclaimer")
+    st.error("""
+    **HIGH RISK TRADING**
+    
+    This system is for educational purposes. 
+    Cryptocurrency trading involves substantial 
+    risk of loss. Past performance does not 
+    guarantee future results.
+    
+    **Trade at your own risk.**
+    """)
+
 # Footer
 st.markdown("---")
 st.markdown("""
