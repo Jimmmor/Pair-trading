@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import tickers from constants file (same as original)
+from constants.tickers import tickers
+
 # Page configuration
 st.set_page_config(page_title="AI Pairs Trading System", layout="wide", initial_sidebar_state="expanded")
 
@@ -51,17 +54,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Cryptocurrency tickers
-CRYPTO_TICKERS = {
-    'BTC': 'BTC-USD', 'ETH': 'ETH-USD', 'BNB': 'BNB-USD', 'SOL': 'SOL-USD',
-    'ADA': 'ADA-USD', 'AVAX': 'AVAX-USD', 'DOT': 'DOT-USD', 'MATIC': 'MATIC-USD',
-    'LINK': 'LINK-USD', 'UNI': 'UNI-USD', 'ATOM': 'ATOM-USD', 'NEAR': 'NEAR-USD',
-    'ALGO': 'ALGO-USD', 'XTZ': 'XTZ-USD', 'EGLD': 'EGLD-USD', 'THETA': 'THETA-USD',
-    'FIL': 'FIL-USD', 'VET': 'VET-USD', 'ICP': 'ICP-USD', 'FLOW': 'FLOW-USD',
-    'MANA': 'MANA-USD', 'SAND': 'SAND-USD', 'CRO': 'CRO-USD', 'FTM': 'FTM-USD',
-    'ONE': 'ONE-USD', 'LRC': 'LRC-USD', 'ENJ': 'ENJ-USD', 'BAT': 'BAT-USD'
-}
-
 class MLPairsTradingSystem:
     """Advanced ML-Optimized Pairs Trading System"""
     
@@ -71,9 +63,11 @@ class MLPairsTradingSystem:
         
     @st.cache_data
     def load_data(_self, symbol, period='1y'):
-        """Load cryptocurrency data"""
+        """Load cryptocurrency data using imported tickers"""
         try:
-            data = yf.download(symbol, period=period, progress=False)['Close']
+            # Use the imported tickers dictionary
+            ticker_symbol = tickers.get(symbol, symbol)
+            data = yf.download(ticker_symbol, period=period, progress=False)['Close']
             return data.dropna()
         except Exception as e:
             st.error(f"Error loading {symbol}: {str(e)}")
@@ -347,9 +341,9 @@ with tab1:
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        crypto1 = st.selectbox("Select Crypto 1:", list(CRYPTO_TICKERS.keys()), index=0)
+        crypto1 = st.selectbox("Select Crypto 1:", list(tickers.keys()), index=0)
     with col2:
-        remaining_cryptos = [c for c in CRYPTO_TICKERS.keys() if c != crypto1]
+        remaining_cryptos = [c for c in tickers.keys() if c != crypto1]
         crypto2 = st.selectbox("Select Crypto 2:", remaining_cryptos, index=0)
     with col3:
         timeframe_days = st.selectbox("Trading Timeframe:", [7, 14, 30, 90], index=2)
@@ -357,8 +351,8 @@ with tab1:
     # Load data
     if st.button("🚀 Analyze Pair & Optimize with AI", type="primary"):
         with st.spinner("Loading market data..."):
-            price1 = trading_system.load_data(CRYPTO_TICKERS[crypto1])
-            price2 = trading_system.load_data(CRYPTO_TICKERS[crypto2])
+            price1 = trading_system.load_data(crypto1)
+            price2 = trading_system.load_data(crypto2)
         
         if not price1.empty and not price2.empty:
             # Run ML optimization
@@ -462,12 +456,12 @@ with tab2:
                                      min_value=1.0, max_value=10.0, value=3.0, step=0.5)
         
         # Get current market data
-        current_price1 = trading_system.load_data(CRYPTO_TICKERS[crypto1], period='5d').iloc[-1]
-        current_price2 = trading_system.load_data(CRYPTO_TICKERS[crypto2], period='5d').iloc[-1]
+        current_price1 = trading_system.load_data(crypto1, period='5d').iloc[-1]
+        current_price2 = trading_system.load_data(crypto2, period='5d').iloc[-1]
         
         # Calculate current z-score
-        recent_data1 = trading_system.load_data(CRYPTO_TICKERS[crypto1], period='3mo')
-        recent_data2 = trading_system.load_data(CRYPTO_TICKERS[crypto2], period='3mo')
+        recent_data1 = trading_system.load_data(crypto1, period='3mo')
+        recent_data2 = trading_system.load_data(crypto2, period='3mo')
         df_current, hedge_ratio = trading_system.calculate_spread_and_zscore(
             recent_data1, recent_data2, 
             trading_system.optimal_params['zscore_window'],
