@@ -61,11 +61,40 @@ def load_crypto_data(symbol, period='1y'):
     try:
         # Use the imported tickers dictionary
         ticker_symbol = tickers.get(symbol, symbol)
-        data = yf.download(ticker_symbol, period=period, progress=False)['Close']
-        return data.dropna()
+        st.write(f"Debug - Loading {symbol} with ticker {ticker_symbol}")
+        
+        # Download data
+        data = yf.download(ticker_symbol, period=period, progress=False)
+        
+        st.write(f"Debug - Raw data type: {type(data)}")
+        st.write(f"Debug - Raw data shape: {data.shape if hasattr(data, 'shape') else 'N/A'}")
+        
+        if data.empty:
+            st.error(f"No data returned for {symbol}")
+            return pd.Series(dtype=float)
+        
+        # Extract Close price
+        if isinstance(data, pd.DataFrame):
+            if 'Close' in data.columns:
+                close_data = data['Close']
+            else:
+                # If single column, use it
+                close_data = data.iloc[:, -1]  # Last column
+        else:
+            # If it's already a Series
+            close_data = data
+        
+        # Clean data
+        close_data = close_data.dropna()
+        
+        st.write(f"Debug - Final data type: {type(close_data)}")
+        st.write(f"Debug - Final data length: {len(close_data)}")
+        
+        return close_data
+        
     except Exception as e:
         st.error(f"Error loading {symbol}: {str(e)}")
-        return pd.Series()
+        return pd.Series(dtype=float)
 
 class MLPairsTradingSystem:
     """Advanced ML-Optimized Pairs Trading System"""
@@ -402,7 +431,13 @@ with tab1:
                 price1 = trading_system.load_data(crypto1)
                 price2 = trading_system.load_data(crypto2)
             
-            if not price1.empty and not price2.empty:
+            # Debug: Check what we actually loaded
+            st.write(f"Debug - price1 type: {type(price1)}, length: {len(price1) if hasattr(price1, '__len__') else 'N/A'}")
+            st.write(f"Debug - price2 type: {type(price2)}, length: {len(price2) if hasattr(price2, '__len__') else 'N/A'}")
+            st.write(f"Debug - price1 empty: {price1.empty if hasattr(price1, 'empty') else 'N/A'}")
+            st.write(f"Debug - price2 empty: {price2.empty if hasattr(price2, 'empty') else 'N/A'}")
+            
+            if not price1.empty and not price2.empty and len(price1) > 50 and len(price2) > 50:
                 st.success(f"✅ Data loaded successfully! {crypto1}: {len(price1)} points, {crypto2}: {len(price2)} points")
                 
                 # Run ML optimization
