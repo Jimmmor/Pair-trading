@@ -986,7 +986,7 @@ with tab2:
                     
                 with col4:
                     st.markdown('<div class="profit-metric">', unsafe_allow_html=True)
-                    st.metric(": [f"${leveraged_position * 0.02:.2f}", 
+                    st.metric("Profit(2%)", [f"${leveraged_position * 0.02:.2f}", 
                                    f"${expected_profit:.2f}",
                                    f"${leveraged_position * 0.08:.2f}",
                                    f"${leveraged_position * 0.15:.2f}"],
