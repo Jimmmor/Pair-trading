@@ -199,7 +199,7 @@ class ProfessionalPairsTrader:
             
             # Calculate rolling statistics using numpy for more control
             rolling_mean = np.convolve(spread_values, np.ones(zscore_window)/zscore_window, mode='same')
-            rolling_std = np.sqrt(np.convolve(spread_values**2, np.ones(zscore_window)/zscore_window - rolling_mean**2)
+            rolling_std = np.sqrt(np.convolve(spread_values**2, np.ones(zscore_window)/zscore_window - rolling_mean**2))
             
             # Handle edge cases
             rolling_std = np.where(rolling_std <= 0, np.nanmean(rolling_std), rolling_std)
