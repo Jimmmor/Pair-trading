@@ -967,8 +967,9 @@ with tab2:
                     profit_scenarios = pd.DataFrame({
                         'Scenario': ['Conservative (2%)', 'Expected Target', 'Aggressive (8%)', 'Maximum (15%)'],
                         'Profit %': ['2%', f"{trading_system.optimal_params['take_profit_pct']}%", '8%', '15%'],
-                        'Profit 💰 Expected Return', f"{trading_system.best_performance['total_return']:.1f}%", 
-                             delta=f"+{trading_system.best_performance['total_return']:.1f}%")
+                        'Profit 💰 Expected Return': [f"{trading_system.best_performance['total_return']:.1f}%"] * 4
+                    })
+                    
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                 with col2:
