@@ -54,16 +54,27 @@ st.markdown("""
         font-family: 'Courier New', monospace;
         text-align: center;
     }
-    .data-table {
-        background: #000000;
-        color: #00ff41;
-        font-family: 'Courier New', monospace;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Import tickers from constants file
-from constants.tickers import tickers as CRYPTO_TICKERS
+# Crypto tickers dictionary
+CRYPTO_TICKERS = {
+    'Bitcoin': 'BTC-USD',
+    'Ethereum': 'ETH-USD',
+    'Binance Coin': 'BNB-USD',
+    'Cardano': 'ADA-USD',
+    'Solana': 'SOL-USD',
+    'XRP': 'XRP-USD',
+    'Polkadot': 'DOT-USD',
+    'Dogecoin': 'DOGE-USD',
+    'Avalanche': 'AVAX-USD',
+    'Chainlink': 'LINK-USD',
+    'Polygon': 'MATIC-USD',
+    'Litecoin': 'LTC-USD',
+    'Bitcoin Cash': 'BCH-USD',
+    'Stellar': 'XLM-USD',
+    'VeChain': 'VET-USD'
+}
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_crypto_data(symbol, period='1y'):
@@ -97,6 +108,25 @@ class ProfessionalPairsTrader:
         
     def calculate_correlation_statistics(self, price1, price2):
         """Calculate comprehensive correlation statistics"""
+        # Ensure we have Series objects
+        if isinstance(price1, pd.DataFrame):
+            if 'Close' in price1.columns:
+                price1 = price1['Close']
+            else:
+                price1 = price1.iloc[:, -1]
+        
+        if isinstance(price2, pd.DataFrame):
+            if 'Close' in price2.columns:
+                price2 = price2['Close']
+            else:
+                price2 = price2.iloc[:, -1]
+        
+        # Convert to Series and ensure they're 1D
+        if not isinstance(price1, pd.Series):
+            price1 = pd.Series(price1.values.flatten(), index=price1.index if hasattr(price1, 'index') else None)
+        if not isinstance(price2, pd.Series):
+            price2 = pd.Series(price2.values.flatten(), index=price2.index if hasattr(price2, 'index') else None)
+        
         # Align data
         price1, price2 = price1.align(price2, join='inner')
         
@@ -157,7 +187,7 @@ class ProfessionalPairsTrader:
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
         """Calculate spread, z-score and generate trading signals"""
         
-        # Ensure data is Series and clean
+        # Ensure we have Series objects
         if isinstance(price1, pd.DataFrame):
             if 'Close' in price1.columns:
                 price1 = price1['Close']
@@ -170,11 +200,28 @@ class ProfessionalPairsTrader:
             else:
                 price2 = price2.iloc[:, -1]
         
-        # Convert to Series if needed
-        price1 = pd.Series(price1).dropna()
-        price2 = pd.Series(price2).dropna()
+        # Ensure Series are properly formatted and 1D
+        if not isinstance(price1, pd.Series):
+            if hasattr(price1, 'values'):
+                values = price1.values
+                if values.ndim > 1:
+                    values = values.flatten()
+                price1 = pd.Series(values, index=price1.index if hasattr(price1, 'index') else None)
+            else:
+                price1 = pd.Series(price1)
         
-        # Align data
+        if not isinstance(price2, pd.Series):
+            if hasattr(price2, 'values'):
+                values = price2.values
+                if values.ndim > 1:
+                    values = values.flatten()
+                price2 = pd.Series(values, index=price2.index if hasattr(price2, 'index') else None)
+            else:
+                price2 = pd.Series(price2)
+        
+        # Clean and align data
+        price1 = price1.dropna()
+        price2 = price2.dropna()
         price1, price2 = price1.align(price2, join='inner')
         
         if len(price1) < lookback_window + zscore_window:
@@ -194,8 +241,8 @@ class ProfessionalPairsTrader:
         except:
             hedge_ratio = 1.0
         
-        # Calculate spread (ensure Series)
-        spread = pd.Series(price1.values - hedge_ratio * price2.values, index=price1.index)
+        # Calculate spread
+        spread = price1 - hedge_ratio * price2
         
         # Calculate z-score
         rolling_mean = spread.rolling(window=zscore_window, min_periods=zscore_window//2).mean()
@@ -206,14 +253,14 @@ class ProfessionalPairsTrader:
         rolling_std = rolling_std.replace(0, rolling_std.mean())
         zscore = (spread - rolling_mean) / rolling_std
         
-        # Create comprehensive dataframe - ensure all Series are 1D
+        # Create comprehensive dataframe
         df = pd.DataFrame({
-            'price1': price1.values,
-            'price2': price2.values,
-            'spread': spread.values,
-            'rolling_mean': rolling_mean.values,
-            'rolling_std': rolling_std.values,
-            'zscore': zscore.fillna(0).values
+            'price1': price1,
+            'price2': price2,
+            'spread': spread,
+            'rolling_mean': rolling_mean,
+            'rolling_std': rolling_std,
+            'zscore': zscore.fillna(0)
         }, index=price1.index)
         
         return df, hedge_ratio
@@ -221,6 +268,9 @@ class ProfessionalPairsTrader:
     def generate_trading_signals(self, df, entry_threshold=2.0, exit_threshold=0.5, 
                                stop_loss_threshold=3.5):
         """Generate precise trading signals based on z-score logic"""
+        
+        if df.empty:
+            return pd.DataFrame()
         
         signals = []
         position = 0  # 0=flat, 1=long spread, -1=short spread
@@ -395,7 +445,7 @@ class ProfessionalPairsTrader:
                     
                     # Apply to capital (simplified)
                     position_size = current_position['position_info']['total_exposure']
-                    pnl_amount = (pnl / entry_spread) * position_size
+                    pnl_amount = (pnl / entry_spread) * position_size if entry_spread != 0 else 0
                     
                     # Transaction costs on exit
                     exit_cost = position_size * transaction_cost
@@ -411,7 +461,7 @@ class ProfessionalPairsTrader:
                         'entry_zscore': current_position['entry_zscore'],
                         'exit_zscore': row['zscore'],
                         'pnl': final_pnl,
-                        'pnl_pct': (final_pnl / position_size) * 100,
+                        'pnl_pct': (final_pnl / position_size) * 100 if position_size != 0 else 0,
                         'exit_reason': row['action']
                     })
                     
@@ -627,7 +677,8 @@ with tab2:
                 if not action_signals.empty:
                     for idx, sig in action_signals.iterrows():
                         color = "#00ff41" if "ENTER" in sig['action'] else "#ff4444"
-                        st.markdown(f"<span style='color: {color}'>{sig['date'].strftime('%Y-%m-%d %H:%M')} - {sig['action']} (Z: {sig['zscore']:.2f})</span>", unsafe_allow_html=True)
+                        date_str = sig['date'].strftime('%Y-%m-%d %H:%M') if hasattr(sig['date'], 'strftime') else str(sig['date'])
+                        st.markdown(f"<span style='color: {color}'>{date_str} - {sig['action']} (Z: {sig['zscore']:.2f})</span>", unsafe_allow_html=True)
         
         # Risk management panel
         st.markdown("---")
@@ -704,8 +755,9 @@ with tab3:
                 st.markdown("**BEST TRADE:**")
                 if backtest['best_trade'] is not None:
                     best = backtest['best_trade']
+                    best_date = best['entry_date'].strftime('%Y-%m-%d') if hasattr(best['entry_date'], 'strftime') else str(best['entry_date'])
                     st.success(f"""
-                    Date: {best['entry_date'].strftime('%Y-%m-%d')}  
+                    Date: {best_date}  
                     Type: {best['position_type']}  
                     Entry Z-Score: {best['entry_zscore']:.2f}  
                     Exit Z-Score: {best['exit_zscore']:.2f}  
@@ -716,8 +768,9 @@ with tab3:
                 st.markdown("**WORST TRADE:**")
                 if backtest['worst_trade'] is not None:
                     worst = backtest['worst_trade']
+                    worst_date = worst['entry_date'].strftime('%Y-%m-%d') if hasattr(worst['entry_date'], 'strftime') else str(worst['entry_date'])
                     st.error(f"""
-                    Date: {worst['entry_date'].strftime('%Y-%m-%d')}  
+                    Date: {worst_date}  
                     Type: {worst['position_type']}  
                     Entry Z-Score: {worst['entry_zscore']:.2f}  
                     Exit Z-Score: {worst['exit_zscore']:.2f}  
@@ -751,9 +804,16 @@ with tab3:
             st.markdown("### TRADE HISTORY")
             
             display_trades = trades_df[['entry_date', 'exit_date', 'position_type', 'entry_zscore', 'exit_zscore', 'pnl', 'pnl_pct', 'exit_reason']].copy()
-            display_trades['entry_date'] = display_trades['entry_date'].dt.strftime('%Y-%m-%d')
-            display_trades['exit_date'] = display_trades['exit_date'].dt.strftime('%Y-%m-%d')
-            display_trades = display_trades.round(2)
+            
+            # Format dates properly
+            if len(display_trades) > 0:
+                display_trades['entry_date'] = display_trades['entry_date'].apply(
+                    lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)
+                )
+                display_trades['exit_date'] = display_trades['exit_date'].apply(
+                    lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)
+                )
+                display_trades = display_trades.round(2)
             
             st.dataframe(
                 display_trades,
