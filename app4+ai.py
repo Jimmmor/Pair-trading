@@ -57,7 +57,7 @@ st.markdown("""
 # Move the cached function outside of the class
 @st.cache_data
 def load_crypto_data(symbol, period='1y'):
-    """Load cryptocurrency data using imported tickers - FIXED VERSION"""
+    """Load cryptocurrency data using imported tickers - COMPLETELY FIXED VERSION"""
     try:
         # Use the imported tickers dictionary
         ticker_symbol = tickers.get(symbol, symbol)
@@ -73,27 +73,43 @@ def load_crypto_data(symbol, period='1y'):
             st.error(f"No data returned for {symbol}")
             return pd.Series(dtype=float)
         
-        # FIXED: Properly extract Close price as 1-dimensional Series
-        if isinstance(data, pd.DataFrame):
-            if 'Close' in data.columns:
-                close_data = data['Close'].squeeze()  # squeeze() ensures 1-dimensional
+        # COMPLETELY FIXED: Ultra-robust Close price extraction
+        def extract_close_price(raw_data):
+            """Extract close price and ensure it's a proper 1D Series"""
+            
+            if isinstance(raw_data, pd.DataFrame):
+                # Case 1: DataFrame with Close column
+                if 'Close' in raw_data.columns:
+                    close_series = raw_data['Close']
+                # Case 2: Single column DataFrame  
+                elif raw_data.shape[1] == 1:
+                    close_series = raw_data.iloc[:, 0]
+                # Case 3: Multi-column, use last column
+                else:
+                    close_series = raw_data.iloc[:, -1]
+                
+                # Ensure it's actually a Series (not DataFrame)
+                if isinstance(close_series, pd.DataFrame):
+                    close_series = close_series.iloc[:, 0]
+                    
+            elif isinstance(raw_data, pd.Series):
+                close_series = raw_data
+                
             else:
-                # If single column, use it and squeeze to ensure 1-dimensional
-                close_data = data.iloc[:, -1].squeeze()
-        else:
-            # If it's already a Series, ensure it's 1-dimensional
-            close_data = data.squeeze()
+                # Convert other types to Series
+                close_series = pd.Series(raw_data)
+            
+            # Final safety check - ensure 1D
+            if hasattr(close_series, 'values') and isinstance(close_series.values, np.ndarray):
+                if close_series.values.ndim > 1:
+                    # Flatten multi-dimensional arrays
+                    flat_values = close_series.values.flatten()
+                    close_series = pd.Series(flat_values, index=close_series.index[:len(flat_values)] if len(close_series.index) >= len(flat_values) else None)
+            
+            return close_series.dropna()
         
-        # Ensure we have a proper 1-dimensional pandas Series
-        if isinstance(close_data, pd.DataFrame):
-            close_data = close_data.iloc[:, 0]  # Take first column if still DataFrame
-        
-        # Convert to Series if it's not already (with proper index)
-        if not isinstance(close_data, pd.Series):
-            close_data = pd.Series(close_data.flatten() if hasattr(close_data, 'flatten') else close_data)
-        
-        # Clean data
-        close_data = close_data.dropna()
+        # Extract close price using the robust function
+        close_data = extract_close_price(data)
         
         st.write(f"Debug - Final data type: {type(close_data)}")
         st.write(f"Debug - Final data length: {len(close_data)}")
@@ -118,44 +134,46 @@ class MLPairsTradingSystem:
         return load_crypto_data(symbol, period)
     
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=30, hedge_method='dollar_neutral'):
-        """Calculate spread and z-score - FIXED to handle all data types properly"""
+        """Calculate spread and z-score - COMPLETELY FIXED for all data types"""
         
-        # FIXED: Robust conversion to 1-dimensional pandas Series
-        def ensure_series(data, name="data"):
-            """Ensure data is a proper 1-dimensional pandas Series"""
-            # If it's a DataFrame, extract the first/only column
-            if isinstance(data, pd.DataFrame):
-                if data.shape[1] == 1:
-                    data = data.iloc[:, 0]
-                else:
-                    # If multiple columns, try to find 'Close' or take last column
-                    if 'Close' in data.columns:
-                        data = data['Close']
+        def convert_to_series(data, name="data"):
+            """Convert any data type to a clean 1-dimensional pandas Series"""
+            try:
+                # Handle pandas Series
+                if isinstance(data, pd.Series):
+                    return data.dropna()
+                
+                # Handle pandas DataFrame
+                elif isinstance(data, pd.DataFrame):
+                    if data.shape[1] == 1:
+                        # Single column - extract as Series
+                        return data.iloc[:, 0].dropna()
                     else:
-                        data = data.iloc[:, -1]
-            
-            # If it's a numpy array, convert to Series
-            if isinstance(data, np.ndarray):
-                if data.ndim > 1:
-                    data = data.flatten()
-                data = pd.Series(data)
-            
-            # If it's not a Series yet, convert it
-            if not isinstance(data, pd.Series):
-                try:
-                    data = pd.Series(data)
-                except Exception as e:
-                    st.error(f"Could not convert {name} to Series: {e}")
-                    return pd.Series(dtype=float)
-            
-            # Clean the data
-            data = data.dropna()
-            
-            return data
+                        # Multiple columns - prefer Close, otherwise last column
+                        if 'Close' in data.columns:
+                            return data['Close'].dropna()
+                        else:
+                            return data.iloc[:, -1].dropna()
+                
+                # Handle numpy arrays (the problematic case)
+                elif isinstance(data, np.ndarray):
+                    # Always flatten to 1D regardless of original shape
+                    flat_data = data.flatten()
+                    # Create Series with default integer index
+                    return pd.Series(flat_data, dtype=float).dropna()
+                
+                # Handle other iterables (lists, tuples, etc.)
+                else:
+                    # Convert to array first, then flatten
+                    array_data = np.asarray(data).flatten()
+                    return pd.Series(array_data, dtype=float).dropna()
+                    
+            except Exception as e:
+                raise ValueError(f"Failed to convert {name} to Series. Error: {e}, Data type: {type(data)}")
         
-        # Ensure both inputs are proper 1-dimensional Series
-        price1 = ensure_series(price1, "price1")
-        price2 = ensure_series(price2, "price2")
+        # Convert both inputs to proper Series
+        price1 = convert_to_series(price1, "price1")
+        price2 = convert_to_series(price2, "price2")
         
         # Check if we have valid data
         if len(price1) == 0 or len(price2) == 0:
@@ -339,32 +357,41 @@ class MLPairsTradingSystem:
     def optimize_parameters(self, price1, price2, trading_timeframe_days=30):
         """ML-powered parameter optimization - FIXED to handle all data types"""
         
-        # FIXED: Ensure inputs are proper 1-dimensional Series without forcing conversion
+        # FIXED: Completely robust conversion to pandas Series
         def safe_series_conversion(data, name):
-            """Safely convert data to pandas Series"""
-            if isinstance(data, pd.Series):
-                return data.dropna()
-            elif isinstance(data, pd.DataFrame):
-                if data.shape[1] == 1:
-                    return data.iloc[:, 0].dropna()
-                else:
-                    # Try to find Close column or use last column
-                    if 'Close' in data.columns:
-                        return data['Close'].dropna()
+            """Safely convert any data type to pandas Series"""
+            try:
+                # Handle pandas Series - just clean and return
+                if isinstance(data, pd.Series):
+                    return data.dropna()
+                
+                # Handle pandas DataFrame
+                elif isinstance(data, pd.DataFrame):
+                    if data.shape[1] == 1:
+                        # Single column DataFrame - extract as Series
+                        return data.iloc[:, 0].dropna()
                     else:
-                        return data.iloc[:, -1].dropna()
-            elif isinstance(data, np.ndarray):
-                if data.ndim == 2 and data.shape[1] == 1:
-                    return pd.Series(data.flatten()).dropna()
-                elif data.ndim == 1:
-                    return pd.Series(data).dropna()
+                        # Multiple columns - try Close, otherwise use last column
+                        if 'Close' in data.columns:
+                            return data['Close'].dropna()
+                        else:
+                            return data.iloc[:, -1].dropna()
+                
+                # Handle numpy arrays
+                elif isinstance(data, np.ndarray):
+                    # Flatten any multi-dimensional array to 1D
+                    flat_data = data.flatten()
+                    # Create Series without index to avoid issues
+                    return pd.Series(flat_data, dtype=float).dropna()
+                
+                # Handle lists and other iterables
                 else:
-                    raise ValueError(f"{name} has unsupported shape: {data.shape}")
-            else:
-                try:
-                    return pd.Series(data).dropna()
-                except Exception as e:
-                    raise ValueError(f"Could not convert {name} to Series: {e}")
+                    # Convert to numpy array first, then flatten
+                    array_data = np.array(data).flatten()
+                    return pd.Series(array_data, dtype=float).dropna()
+                    
+            except Exception as e:
+                raise ValueError(f"Could not convert {name} to Series: {e}. Data type: {type(data)}, Shape: {getattr(data, 'shape', 'N/A')}")
         
         # Convert inputs safely
         price1 = safe_series_conversion(price1, "price1")
