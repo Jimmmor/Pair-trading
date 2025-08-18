@@ -1034,10 +1034,10 @@ with st.sidebar:
     st.markdown("*Professional Pairs Trading System v1.0*")
     st.markdown("*Quantitative • Risk-Managed • Profitable*")
                         
-                        st.markdown("### POSITION SIZING")
-                        st.markdown(f"""
-                        **{trader.current_data['crypto1']}:** {position_info['asset1_action']} {position_info['asset1_quantity']:.6f}  
-                        **{trader.current_data['crypto2']}:** {position_info['asset2_action']} {position_info['asset2_quantity']:.6f}  
-                        **TOTAL EXPOSURE:** ${position_info['total_exposure']:.2f}  
-                        **MARGIN REQUIRED:** ${position_info['margin_required']:.2f}  
+    st.markdown("### POSITION SIZING")
+    st.markdown(f"""
+    **{trader.current_data['crypto1']}:** {position_info['asset1_action']} {position_info['asset1_quantity']:.6f}  
+    **{trader.current_data['crypto2']}:** {position_info['asset2_action']} {position_info['asset2_quantity']:.6f}  
+    **TOTAL EXPOSURE:** ${position_info['total_exposure']:.2f}  
+    **MARGIN REQUIRED:** ${position_info['margin_required']:.2f}  
                         """)
