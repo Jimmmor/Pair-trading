@@ -154,60 +154,61 @@ class ProfessionalPairsTrader:
         except:
             return 0.5
     
+
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
         """Calculate spread, z-score and generate trading signals"""
         
-        # 1. Ensure we have proper pandas Series with numeric values
+        # 1. Input validation and preparation
         price1 = pd.Series(price1).dropna()
         price2 = pd.Series(price2).dropna()
         
-        # 2. Align the data properly
+        if len(price1) == 0 or len(price2) == 0:
+            return pd.DataFrame(), 1.0
+        
+        # 2. Align data
         price1, price2 = price1.align(price2, join='inner')
         
-        # Check if we have enough data
         if len(price1) < lookback_window + zscore_window:
             return pd.DataFrame(), 1.0
         
-        # 3. Calculate hedge ratio with error handling
+        # 3. Calculate hedge ratio
         try:
             X = price2.iloc[-lookback_window:].values.reshape(-1, 1)
             y = price1.iloc[-lookback_window:].values
             model = LinearRegression().fit(X, y)
             hedge_ratio = float(model.coef_[0])
-            
-            if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
-                hedge_ratio = 1.0
-        except Exception as e:
-            print(f"Error calculating hedge ratio: {e}")
+            hedge_ratio = 1.0 if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2 else hedge_ratio
+        except:
             hedge_ratio = 1.0
         
         # 4. Calculate spread and rolling statistics
         spread = price1 - (hedge_ratio * price2)
         
-        # Fix for rolling calculations - ensure 1D output
-        rolling_mean = spread.rolling(window=zscore_window, min_periods=1).mean().values
-        rolling_std = spread.rolling(window=zscore_window, min_periods=1).std().values
+        # Ensure all calculations return 1D arrays
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=1).mean()
+        rolling_std = spread.rolling(window=zscore_window, min_periods=1).std()
         
-        # Handle potential NaN/zero values
-        rolling_std = np.where(np.isnan(rolling_std) | (rolling_std == 0), 
-                             np.nanmean(rolling_std), 
-                             rolling_std)
+        # Handle NaN and zero values safely
+        rolling_std = rolling_std.copy()
+        rolling_std[rolling_std == 0] = np.nan
+        rolling_std.fillna(rolling_std.mean(), inplace=True)
         
-        zscore = (spread.values - rolling_mean) / rolling_std
+        zscore = (spread - rolling_mean) / rolling_std
+        zscore.fillna(0, inplace=True)
         
-        # 5. Create DataFrame with proper 1D arrays
+        # 5. Create DataFrame with strict 1D arrays
         try:
             df = pd.DataFrame({
-                'price1': price1.values,
-                'price2': price2.values,
-                'spread': spread.values,
-                'rolling_mean': rolling_mean,
-                'rolling_std': rolling_std,
-                'zscore': np.nan_to_num(zscore, nan=0.0)
+                'price1': price1.to_numpy().flatten(),
+                'price2': price2.to_numpy().flatten(),
+                'spread': spread.to_numpy().flatten(),
+                'rolling_mean': rolling_mean.to_numpy().flatten(),
+                'rolling_std': rolling_std.to_numpy().flatten(),
+                'zscore': zscore.to_numpy().flatten()
             }, index=price1.index)
             
         except Exception as e:
-            print(f"Error creating DataFrame: {e}")
+            print(f"DataFrame creation error: {str(e)}")
             return pd.DataFrame(), hedge_ratio
         
         return df, hedge_ratio
