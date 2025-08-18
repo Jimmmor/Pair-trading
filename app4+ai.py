@@ -157,23 +157,24 @@ class ProfessionalPairsTrader:
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
         """Calculate spread, z-score and generate trading signals"""
         
-        # Align data
+        # Align data and ensure proper types
         price1, price2 = price1.align(price2, join='inner')
+        price1 = pd.Series(price1.values.ravel(), index=price1.index)
+        price2 = pd.Series(price2.values.ravel(), index=price2.index)
         
         if len(price1) < lookback_window + zscore_window:
             return pd.DataFrame(), 1.0
         
-        # Calculate optimal hedge ratio using regression
+        # Calculate optimal hedge ratio
         try:
             X = price2.iloc[-lookback_window:].values.reshape(-1, 1)
             y = price1.iloc[-lookback_window:].values
             model = LinearRegression().fit(X, y)
-            hedge_ratio = model.coef_[0]
+            hedge_ratio = float(model.coef_[0])  # Ensure scalar
             
             # Validate hedge ratio
             if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
                 hedge_ratio = 1.0
-                
         except:
             hedge_ratio = 1.0
         
@@ -181,8 +182,8 @@ class ProfessionalPairsTrader:
         spread = price1 - hedge_ratio * price2
         
         # Calculate z-score
-        rolling_mean = spread.rolling(window=zscore_window, min_periods=zscore_window//2).mean()
-        rolling_std = spread.rolling(window=zscore_window, min_periods=zscore_window//2).std()
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=zscore_window//2).mean().squeeze()
+        rolling_std = spread.rolling(window=zscore_window, min_periods=zscore_window//2).std().squeeze()
         
         # Prevent division by zero
         rolling_std = rolling_std.fillna(rolling_std.mean()).replace(0, rolling_std.mean())
@@ -190,12 +191,12 @@ class ProfessionalPairsTrader:
         
         # Create comprehensive dataframe
         df = pd.DataFrame({
-            'price1': price1,
-            'price2': price2,
-            'spread': spread,
-            'rolling_mean': rolling_mean,
-            'rolling_std': rolling_std,
-            'zscore': zscore.fillna(0)
+            'price1': price1.values.ravel(),
+            'price2': price2.values.ravel(),
+            'spread': spread.values.ravel(),
+            'rolling_mean': rolling_mean.values.ravel(),
+            'rolling_std': rolling_std.values.ravel(),
+            'zscore': zscore.fillna(0).values.ravel()
         }, index=price1.index)
         
         return df, hedge_ratio
