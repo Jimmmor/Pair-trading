@@ -157,11 +157,9 @@ class ProfessionalPairsTrader:
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
         """Calculate spread, z-score and generate trading signals"""
         
-        # 1. Data preparation - ensure we have proper pandas Series
-        if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1)
-        if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2)
+        # 1. Ensure we have proper pandas Series with numeric values
+        price1 = pd.Series(price1).dropna()
+        price2 = pd.Series(price2).dropna()
         
         # 2. Align the data properly
         price1, price2 = price1.align(price2, join='inner')
@@ -175,9 +173,8 @@ class ProfessionalPairsTrader:
             X = price2.iloc[-lookback_window:].values.reshape(-1, 1)
             y = price1.iloc[-lookback_window:].values
             model = LinearRegression().fit(X, y)
-            hedge_ratio = float(model.coef_[0])  # Ensure it's a scalar
+            hedge_ratio = float(model.coef_[0])
             
-            # Validate hedge ratio
             if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
                 hedge_ratio = 1.0
         except Exception as e:
@@ -187,28 +184,27 @@ class ProfessionalPairsTrader:
         # 4. Calculate spread and rolling statistics
         spread = price1 - (hedge_ratio * price2)
         
-        # Ensure all rolling calculations return Series
-        rolling_mean = spread.rolling(window=zscore_window).mean()
-        rolling_std = spread.rolling(window=zscore_window).std()
+        # Fix for rolling calculations - ensure 1D output
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=1).mean().values
+        rolling_std = spread.rolling(window=zscore_window, min_periods=1).std().values
         
         # Handle potential NaN/zero values
-        rolling_std = rolling_std.replace(0, np.nan).fillna(rolling_std.mean())
-        zscore = (spread - rolling_mean) / rolling_std
+        rolling_std = np.where(np.isnan(rolling_std) | (rolling_std == 0), 
+                             np.nanmean(rolling_std), 
+                             rolling_std)
+        
+        zscore = (spread.values - rolling_mean) / rolling_std
         
         # 5. Create DataFrame with proper 1D arrays
         try:
-            # Convert all to numpy arrays first
-            data = {
-                'price1': np.array(price1).ravel(),
-                'price2': np.array(price2).ravel(),
-                'spread': np.array(spread).ravel(),
-                'rolling_mean': np.array(rolling_mean).ravel(),
-                'rolling_std': np.array(rolling_std).ravel(),
-                'zscore': np.array(zscore.fillna(0)).ravel()
-            }
-            
-            # Create DataFrame
-            df = pd.DataFrame(data, index=price1.index)
+            df = pd.DataFrame({
+                'price1': price1.values,
+                'price2': price2.values,
+                'spread': spread.values,
+                'rolling_mean': rolling_mean,
+                'rolling_std': rolling_std,
+                'zscore': np.nan_to_num(zscore, nan=0.0)
+            }, index=price1.index)
             
         except Exception as e:
             print(f"Error creating DataFrame: {e}")
