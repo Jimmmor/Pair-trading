@@ -62,8 +62,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Cryptocurrency tickers - expanded list
-from constants.tickers import tickers
+# Import tickers from constants file
+from constants.tickers import tickers as CRYPTO_TICKERS
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_crypto_data(symbol, period='1y'):
     """Load cryptocurrency data with error handling"""
