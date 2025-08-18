@@ -154,78 +154,67 @@ class ProfessionalPairsTrader:
         except:
             return 0.5
     
-
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
         """Calculate spread, z-score and generate trading signals"""
         
-        # 1. Input validation and conversion to 1D arrays
-        try:
-            price1 = np.asarray(price1).flatten()
-            price2 = np.asarray(price2).flatten()
-            price1 = pd.Series(price1).dropna()
-            price2 = pd.Series(price2).dropna()
-        except Exception as e:
-            print(f"Input conversion error: {e}")
-            return pd.DataFrame(), 1.0
+        # Ensure data is Series and clean
+        if isinstance(price1, pd.DataFrame):
+            if 'Close' in price1.columns:
+                price1 = price1['Close']
+            else:
+                price1 = price1.iloc[:, -1]
         
-        # 2. Align data
-        try:
-            price1, price2 = price1.align(price2, join='inner')
-        except Exception as e:
-            print(f"Data alignment error: {e}")
-            return pd.DataFrame(), 1.0
+        if isinstance(price2, pd.DataFrame):
+            if 'Close' in price2.columns:
+                price2 = price2['Close']
+            else:
+                price2 = price2.iloc[:, -1]
         
-        # Check data length
+        # Convert to Series if needed
+        price1 = pd.Series(price1).dropna()
+        price2 = pd.Series(price2).dropna()
+        
+        # Align data
+        price1, price2 = price1.align(price2, join='inner')
+        
         if len(price1) < lookback_window + zscore_window:
             return pd.DataFrame(), 1.0
         
-        # 3. Calculate hedge ratio
+        # Calculate optimal hedge ratio using regression
         try:
             X = price2.iloc[-lookback_window:].values.reshape(-1, 1)
             y = price1.iloc[-lookback_window:].values
             model = LinearRegression().fit(X, y)
-            hedge_ratio = float(model.coef_[0])
-            hedge_ratio = 1.0 if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2 else hedge_ratio
-        except Exception as e:
-            print(f"Hedge ratio calculation error: {e}")
+            hedge_ratio = float(model.coef_[0])  # Ensure scalar
+            
+            # Validate hedge ratio
+            if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
+                hedge_ratio = 1.0
+                
+        except:
             hedge_ratio = 1.0
         
-        # 4. Calculate spread and rolling statistics
-        try:
-            spread = price1 - (hedge_ratio * price2)
-            
-            # Convert to numpy arrays explicitly
-            spread_values = spread.values.flatten()
-            
-            # Calculate rolling statistics using numpy for more control
-            rolling_mean = np.convolve(spread_values, np.ones(zscore_window)/zscore_window, mode='same')
-            rolling_std = np.sqrt(np.convolve(spread_values**2, np.ones(zscore_window)/zscore_window - rolling_mean**2))
-            
-            # Handle edge cases
-            rolling_std = np.where(rolling_std <= 0, np.nanmean(rolling_std), rolling_std)
-            zscore = (spread_values - rolling_mean) / rolling_std
-            zscore = np.nan_to_num(zscore, nan=0.0)
-            
-        except Exception as e:
-            print(f"Spread calculation error: {e}")
-            return pd.DataFrame(), hedge_ratio
+        # Calculate spread (ensure Series)
+        spread = pd.Series(price1.values - hedge_ratio * price2.values, index=price1.index)
         
-        # 5. Create DataFrame with strict type checking
-        try:
-            # Ensure all arrays are 1D and of equal length
-            data_length = len(spread_values)
-            df = pd.DataFrame({
-                'price1': price1.values[:data_length],
-                'price2': price2.values[:data_length],
-                'spread': spread_values[:data_length],
-                'rolling_mean': rolling_mean[:data_length],
-                'rolling_std': rolling_std[:data_length],
-                'zscore': zscore[:data_length]
-            }, index=price1.index[:data_length])
-            
-        except Exception as e:
-            print(f"DataFrame creation error: {e}")
-            return pd.DataFrame(), hedge_ratio
+        # Calculate z-score
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=zscore_window//2).mean()
+        rolling_std = spread.rolling(window=zscore_window, min_periods=zscore_window//2).std()
+        
+        # Prevent division by zero
+        rolling_std = rolling_std.fillna(rolling_std.mean())
+        rolling_std = rolling_std.replace(0, rolling_std.mean())
+        zscore = (spread - rolling_mean) / rolling_std
+        
+        # Create comprehensive dataframe - ensure all Series are 1D
+        df = pd.DataFrame({
+            'price1': price1.values,
+            'price2': price2.values,
+            'spread': spread.values,
+            'rolling_mean': rolling_mean.values,
+            'rolling_std': rolling_std.values,
+            'zscore': zscore.fillna(0).values
+        }, index=price1.index)
         
         return df, hedge_ratio
     
