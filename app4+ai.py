@@ -3,1524 +3,956 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
+from plotly.subplots import make_subplots
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import ParameterGrid
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import tickers from constants file
-# For demo purposes, we'll define tickers here
-from constants.tickers import tickers
-# Page configuration
-st.set_page_config(page_title="💰 Professional Crypto Pairs Trading", layout="wide", initial_sidebar_state="expanded")
-
-# Enhanced CSS for professional look
+# Professional CSS - Finance style
 st.markdown("""
 <style>
-    .profit-signal {
-        background: linear-gradient(45deg, #00ff88, #00cc6a);
+    .main-header {
+        background: linear-gradient(90deg, #0f0f0f 0%, #1a1a1a 100%);
         padding: 20px;
-        border-radius: 15px;
-        color: white;
-        font-weight: bold;
+        border-radius: 5px;
+        color: #00ff41;
         text-align: center;
-        border: 3px solid #00aa55;
-        box-shadow: 0 8px 16px rgba(0,255,136,0.3);
-        animation: pulse 2s infinite;
+        font-family: 'Courier New', monospace;
+        margin-bottom: 20px;
     }
-    .loss-signal {
-        background: linear-gradient(45deg, #ff3366, #cc1144);
-        padding: 20px;
-        border-radius: 15px;
-        color: white;
-        font-weight: bold;
-        text-align: center;
-        border: 3px solid #aa0022;
-        box-shadow: 0 8px 16px rgba(255,51,102,0.3);
-    }
-    .no-signal {
-        background: linear-gradient(45deg, #666666, #444444);
+    .metric-card {
+        background: #000000;
+        border: 1px solid #00ff41;
         padding: 15px;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
+        border-radius: 3px;
+        color: #00ff41;
+        font-family: 'Courier New', monospace;
     }
-    .profit-metric {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .profit-alert {
+        background: #001100;
+        border: 2px solid #00ff41;
         padding: 15px;
-        border-radius: 10px;
-        color: white;
+        color: #00ff41;
+        font-family: 'Courier New', monospace;
         text-align: center;
-        border: 2px solid #5a67d8;
     }
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
+    .loss-alert {
+        background: #110000;
+        border: 2px solid #ff0000;
+        padding: 15px;
+        color: #ff0000;
+        font-family: 'Courier New', monospace;
+        text-align: center;
+    }
+    .neutral-alert {
+        background: #111111;
+        border: 1px solid #666666;
+        padding: 15px;
+        color: #cccccc;
+        font-family: 'Courier New', monospace;
+        text-align: center;
+    }
+    .data-table {
+        background: #000000;
+        color: #00ff41;
+        font-family: 'Courier New', monospace;
     }
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+# Cryptocurrency tickers - expanded list
+CRYPTO_TICKERS = {
+    'BTC': 'BTC-USD', 'ETH': 'ETH-USD', 'BNB': 'BNB-USD', 'XRP': 'XRP-USD',
+    'ADA': 'ADA-USD', 'SOL': 'SOL-USD', 'DOT': 'DOT-USD', 'DOGE': 'DOGE-USD',
+    'AVAX': 'AVAX-USD', 'SHIB': 'SHIB-USD', 'MATIC': 'MATIC-USD', 'LTC': 'LTC-USD',
+    'UNI': 'UNI-USD', 'LINK': 'LINK-USD', 'ALGO': 'ALGO-USD', 'VET': 'VET-USD',
+    'ICP': 'ICP-USD', 'FIL': 'FIL-USD', 'TRX': 'TRX-USD', 'XLM': 'XLM-USD'
+}
+
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_crypto_data(symbol, period='1y'):
-    """Load cryptocurrency data using imported tickers"""
+    """Load cryptocurrency data with error handling"""
     try:
-        ticker_symbol = tickers.get(symbol, symbol)
-        data = yf.download(ticker_symbol, period=period, progress=False)
+        ticker = CRYPTO_TICKERS.get(symbol, symbol)
+        data = yf.download(ticker, period=period, progress=False)
         
         if data.empty:
             return pd.Series(dtype=float)
         
-        # Extract close price robustly
-        if isinstance(data, pd.DataFrame):
-            if 'Close' in data.columns:
-                close_data = data['Close']
-            else:
-                close_data = data.iloc[:, -1]
+        # Return close prices as Series
+        if isinstance(data, pd.DataFrame) and 'Close' in data.columns:
+            return data['Close'].dropna()
+        elif isinstance(data, pd.DataFrame):
+            return data.iloc[:, -1].dropna()
         else:
-            close_data = data
-        
-        return close_data.dropna()
-        
+            return data.dropna()
+            
     except Exception as e:
-        st.error(f"Error loading {symbol}: {str(e)}")
+        st.error(f"Data loading error for {symbol}: {str(e)}")
         return pd.Series(dtype=float)
 
-class ProfitMaximizingPairsTrader:
-    """Ultra-Profitable Pairs Trading System - Only Profitable Strategies Allowed"""
+class ProfessionalPairsTrader:
+    """Professional pairs trading system with robust logic"""
     
     def __init__(self):
         self.optimal_params = {}
-        self.best_performance = None
-        self.min_profit_threshold = 15.0  # Minimum 15% return required
+        self.current_data = {}
+        self.correlation_threshold = 0.7
         
-    def load_data(self, symbol, period='1y'):
-        return load_crypto_data(symbol, period)
-    
-    def calculate_spread_and_zscore(self, price1, price2, zscore_window=30, hedge_method='dollar_neutral'):
-        """Calculate spread and z-score with enhanced precision"""
+    def calculate_correlation_statistics(self, price1, price2):
+        """Calculate comprehensive correlation statistics"""
+        # Align data
+        price1, price2 = price1.align(price2, join='inner')
         
-        # Convert to clean Series
-        if isinstance(price1, pd.DataFrame):
-            price1 = price1.iloc[:, -1] if 'Close' not in price1.columns else price1['Close']
-        if isinstance(price2, pd.DataFrame):
-            price2 = price2.iloc[:, -1] if 'Close' not in price2.columns else price2['Close']
+        if len(price1) < 30:
+            return None
             
-        price1 = pd.Series(price1).dropna()
-        price2 = pd.Series(price2).dropna()
+        # Calculate returns
+        ret1 = price1.pct_change().dropna()
+        ret2 = price2.pct_change().dropna()
         
-        if len(price1) == 0 or len(price2) == 0:
-            return pd.DataFrame(), 1.0
+        # Correlation analysis
+        correlation = ret1.corr(ret2)
+        
+        # Rolling correlations
+        rolling_30d = ret1.rolling(30).corr(ret2).dropna()
+        rolling_90d = ret1.rolling(90).corr(ret2).dropna()
+        
+        # Cointegration test (simplified)
+        try:
+            # Linear regression for cointegration
+            X = price2.values.reshape(-1, 1)
+            y = price1.values
+            model = LinearRegression().fit(X, y)
+            residuals = y - model.predict(X)
+            
+            # Check for mean reversion in residuals
+            residual_series = pd.Series(residuals, index=price1.index)
+            adf_stat = self._simplified_adf_test(residual_series)
+            
+        except:
+            adf_stat = 0.5
+            
+        return {
+            'correlation': correlation,
+            'correlation_30d_mean': rolling_30d.mean(),
+            'correlation_30d_std': rolling_30d.std(),
+            'correlation_90d_mean': rolling_90d.mean(),
+            'correlation_stability': rolling_30d.std(),
+            'cointegration_score': adf_stat,
+            'suitable_for_pairs': correlation > self.correlation_threshold and adf_stat > 0.6
+        }
+    
+    def _simplified_adf_test(self, series):
+        """Simplified stationarity test"""
+        try:
+            # Check for mean reversion properties
+            mean_val = series.mean()
+            crosses = ((series > mean_val) != (series.shift(1) > mean_val)).sum()
+            total_points = len(series)
+            
+            # High crossing frequency indicates mean reversion
+            crossing_rate = crosses / total_points
+            return min(crossing_rate * 2, 1.0)  # Normalize to 0-1
+            
+        except:
+            return 0.5
+    
+    def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
+        """Calculate spread, z-score and generate trading signals"""
         
         # Align data
         price1, price2 = price1.align(price2, join='inner')
         
-        if len(price1) < 50:
+        if len(price1) < lookback_window + zscore_window:
             return pd.DataFrame(), 1.0
         
-        # Calculate optimal hedge ratio
-        if hedge_method == 'regression':
-            try:
-                # Use longer lookback for more stable hedge ratio
-                lookback = min(len(price1), 252)  # 1 year max
-                X = price2.iloc[-lookback:].values.reshape(-1, 1)
-                y = price1.iloc[-lookback:].values
-                model = LinearRegression().fit(X, y)
-                hedge_ratio = model.coef_[0]
-                
-                # Quality check: ensure reasonable hedge ratio
-                if abs(hedge_ratio) > 10 or abs(hedge_ratio) < 0.1:
-                    hedge_ratio = 1.0
-                    
-            except:
+        # Calculate optimal hedge ratio using regression
+        try:
+            X = price2.iloc[-lookback_window:].values.reshape(-1, 1)
+            y = price1.iloc[-lookback_window:].values
+            model = LinearRegression().fit(X, y)
+            hedge_ratio = model.coef_[0]
+            
+            # Validate hedge ratio
+            if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
                 hedge_ratio = 1.0
-        else:
+                
+        except:
             hedge_ratio = 1.0
         
         # Calculate spread
         spread = price1 - hedge_ratio * price2
         
-        # Enhanced z-score calculation with adaptive window
-        min_window = max(20, zscore_window // 2)
-        rolling_mean = spread.rolling(window=zscore_window, min_periods=min_window).mean()
-        rolling_std = spread.rolling(window=zscore_window, min_periods=min_window).std()
+        # Calculate z-score
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=zscore_window//2).mean()
+        rolling_std = spread.rolling(window=zscore_window, min_periods=zscore_window//2).std()
         
         # Prevent division by zero
-        rolling_std = rolling_std.replace(0, rolling_std.mean())
+        rolling_std = rolling_std.fillna(rolling_std.mean()).replace(0, rolling_std.mean())
         zscore = (spread - rolling_mean) / rolling_std
         
+        # Create comprehensive dataframe
         df = pd.DataFrame({
             'price1': price1,
             'price2': price2,
             'spread': spread,
+            'rolling_mean': rolling_mean,
+            'rolling_std': rolling_std,
             'zscore': zscore.fillna(0)
         }, index=price1.index)
         
         return df, hedge_ratio
-
-    def enhanced_backtest(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
-                         take_profit_pct, leverage, max_hold_days=30):
-        """Enhanced backtesting focused on maximum profitability"""
+    
+    def generate_trading_signals(self, df, entry_threshold=2.0, exit_threshold=0.5, 
+                               stop_loss_threshold=3.5):
+        """Generate precise trading signals based on z-score logic"""
         
-        if len(df) < 60:
-            return self._empty_results()
-        
-        capital = 10000
-        position = 0
-        trades = []
-        portfolio_values = [capital]
-        entry_price = 0
+        signals = []
+        position = 0  # 0=flat, 1=long spread, -1=short spread
+        entry_zscore = 0
         entry_date = None
         
-        # Dynamic transaction costs based on market conditions
-        base_transaction_cost = 0.001
-        slippage_cost = 0.0005
-        total_transaction_cost = base_transaction_cost + slippage_cost
-        
-        # Enhanced risk management
-        max_concurrent_risk = 0.20  # Maximum 20% of capital at risk
-        
-        for i in range(50, len(df)):
+        for i in range(len(df)):
             current_date = df.index[i]
             current_zscore = df['zscore'].iloc[i]
             
-            if pd.isna(current_zscore) or abs(current_zscore) > 6:  # Filter extreme values
-                portfolio_values.append(portfolio_values[-1])
+            if pd.isna(current_zscore):
                 continue
             
-            # Position management with enhanced exit logic
+            signal = {
+                'date': current_date,
+                'zscore': current_zscore,
+                'price1': df['price1'].iloc[i],
+                'price2': df['price2'].iloc[i],
+                'spread': df['spread'].iloc[i],
+                'position': position,
+                'action': 'HOLD',
+                'entry_price': None,
+                'exit_price': None,
+                'stop_loss': None,
+                'take_profit': None
+            }
+            
+            # Position management
             if position != 0:
-                days_held = (current_date - entry_date).days
-                
-                # Calculate unrealized P&L
-                if position == 1:  # Long spread
-                    unrealized_pnl_pct = ((df['spread'].iloc[i] - entry_price) / abs(entry_price)) * leverage
-                else:  # Short spread
-                    unrealized_pnl_pct = ((entry_price - df['spread'].iloc[i]) / abs(entry_price)) * leverage
-                
-                current_value = capital * (1 + unrealized_pnl_pct)
-                
-                # Advanced exit conditions
-                should_exit = False
-                exit_reason = ""
-                
-                # Profit-taking conditions (enhanced)
-                if position == 1:
-                    if current_zscore >= -exit_zscore or current_zscore >= -0.1:
-                        should_exit, exit_reason = True, "profit_reversion"
-                    elif unrealized_pnl_pct >= take_profit_pct/100:
-                        should_exit, exit_reason = True, "take_profit_hit"
-                elif position == -1:
-                    if current_zscore <= exit_zscore or current_zscore <= 0.1:
-                        should_exit, exit_reason = True, "profit_reversion"
-                    elif unrealized_pnl_pct >= take_profit_pct/100:
-                        should_exit, exit_reason = True, "take_profit_hit"
-                
-                # Risk management exits (tighter)
-                if unrealized_pnl_pct <= -stop_loss_pct/100:
-                    should_exit, exit_reason = True, "stop_loss"
-                elif days_held >= max_hold_days:
-                    should_exit, exit_reason = True, "time_limit"
-                
-                # Momentum-based early exit (capture quick profits)
-                if days_held >= 3 and unrealized_pnl_pct > 0.02:  # 2% profit after 3 days
-                    if (position == 1 and current_zscore > -1.0) or (position == -1 and current_zscore < 1.0):
-                        should_exit, exit_reason = True, "quick_profit"
-                
-                if should_exit:
-                    # Execute exit with transaction costs
-                    final_value = current_value * (1 - total_transaction_cost)
+                # Check exit conditions
+                if position == 1:  # Long spread position
+                    # Exit conditions: zscore crosses back above exit_threshold or hits stop loss
+                    if current_zscore >= -exit_threshold:
+                        signal['action'] = 'EXIT_LONG'
+                        signal['exit_price'] = df['spread'].iloc[i]
+                        position = 0
+                    elif current_zscore <= -stop_loss_threshold:
+                        signal['action'] = 'STOP_LOSS_LONG'
+                        signal['exit_price'] = df['spread'].iloc[i]
+                        position = 0
+                        
+                elif position == -1:  # Short spread position
+                    # Exit conditions: zscore crosses back below exit_threshold or hits stop loss
+                    if current_zscore <= exit_threshold:
+                        signal['action'] = 'EXIT_SHORT'
+                        signal['exit_price'] = df['spread'].iloc[i]
+                        position = 0
+                    elif current_zscore >= stop_loss_threshold:
+                        signal['action'] = 'STOP_LOSS_SHORT'
+                        signal['exit_price'] = df['spread'].iloc[i]
+                        position = 0
+            
+            else:  # No position
+                # Entry conditions
+                if current_zscore <= -entry_threshold:
+                    # Long spread: buy asset1, sell asset2
+                    signal['action'] = 'ENTER_LONG'
+                    signal['entry_price'] = df['spread'].iloc[i]
+                    signal['stop_loss'] = -stop_loss_threshold
+                    signal['take_profit'] = -exit_threshold
+                    position = 1
+                    entry_zscore = current_zscore
+                    entry_date = current_date
                     
+                elif current_zscore >= entry_threshold:
+                    # Short spread: sell asset1, buy asset2
+                    signal['action'] = 'ENTER_SHORT'
+                    signal['entry_price'] = df['spread'].iloc[i]
+                    signal['stop_loss'] = stop_loss_threshold
+                    signal['take_profit'] = exit_threshold
+                    position = -1
+                    entry_zscore = current_zscore
+                    entry_date = current_date
+            
+            signal['position'] = position
+            signals.append(signal)
+        
+        return pd.DataFrame(signals)
+    
+    def calculate_position_sizing(self, signal_row, capital, risk_per_trade=0.02, max_leverage=3):
+        """Calculate precise position sizing for each asset"""
+        
+        if signal_row['action'] not in ['ENTER_LONG', 'ENTER_SHORT']:
+            return None
+        
+        # Risk-based position sizing
+        risk_amount = capital * risk_per_trade
+        
+        # Calculate position sizes based on current prices
+        price1 = signal_row['price1']
+        price2 = signal_row['price2']
+        
+        if signal_row['action'] == 'ENTER_LONG':
+            # Long spread: Buy asset1, Short asset2
+            # Allocate capital proportionally
+            total_allocation = min(capital * 0.5 * max_leverage, risk_amount * 50)  # Max 50x risk
+            
+            asset1_qty = total_allocation / (2 * price1)  # Buy asset1
+            asset2_qty = total_allocation / (2 * price2)  # Short asset2
+            
+            return {
+                'asset1_action': 'BUY',
+                'asset1_quantity': asset1_qty,
+                'asset1_value': asset1_qty * price1,
+                'asset2_action': 'SHORT',
+                'asset2_quantity': asset2_qty,
+                'asset2_value': asset2_qty * price2,
+                'total_exposure': asset1_qty * price1 + asset2_qty * price2,
+                'margin_required': total_allocation / max_leverage
+            }
+            
+        else:  # ENTER_SHORT
+            # Short spread: Short asset1, Buy asset2
+            total_allocation = min(capital * 0.5 * max_leverage, risk_amount * 50)
+            
+            asset1_qty = total_allocation / (2 * price1)  # Short asset1
+            asset2_qty = total_allocation / (2 * price2)  # Buy asset2
+            
+            return {
+                'asset1_action': 'SHORT',
+                'asset1_quantity': asset1_qty,
+                'asset1_value': asset1_qty * price1,
+                'asset2_action': 'BUY',
+                'asset2_quantity': asset2_qty,
+                'asset2_value': asset2_qty * price2,
+                'total_exposure': asset1_qty * price1 + asset2_qty * price2,
+                'margin_required': total_allocation / max_leverage
+            }
+    
+    def backtest_strategy(self, signals_df, initial_capital=10000):
+        """Professional backtesting with transaction costs"""
+        
+        if signals_df.empty:
+            return self._empty_backtest_results()
+        
+        capital = initial_capital
+        portfolio_values = [capital]
+        trades = []
+        current_position = None
+        
+        transaction_cost = 0.001  # 0.1% per trade
+        
+        for i, row in signals_df.iterrows():
+            
+            if row['action'] in ['ENTER_LONG', 'ENTER_SHORT']:
+                # Calculate position sizing
+                position_info = self.calculate_position_sizing(row, capital)
+                
+                if position_info:
+                    # Deduct transaction costs
+                    cost = position_info['total_exposure'] * transaction_cost
+                    capital -= cost
+                    
+                    current_position = {
+                        'entry_date': row['date'],
+                        'entry_zscore': row['zscore'],
+                        'entry_spread': row['entry_price'],
+                        'position_type': row['action'],
+                        'position_info': position_info
+                    }
+            
+            elif row['action'] in ['EXIT_LONG', 'EXIT_SHORT', 'STOP_LOSS_LONG', 'STOP_LOSS_SHORT']:
+                if current_position:
+                    # Calculate P&L
+                    entry_spread = current_position['entry_spread']
+                    exit_spread = row['exit_price']
+                    
+                    if current_position['position_type'] == 'ENTER_LONG':
+                        pnl = exit_spread - entry_spread
+                    else:  # ENTER_SHORT
+                        pnl = entry_spread - exit_spread
+                    
+                    # Apply to capital (simplified)
+                    position_size = current_position['position_info']['total_exposure']
+                    pnl_amount = (pnl / entry_spread) * position_size
+                    
+                    # Transaction costs on exit
+                    exit_cost = position_size * transaction_cost
+                    final_pnl = pnl_amount - exit_cost
+                    
+                    capital += final_pnl
+                    
+                    # Record trade
                     trades.append({
-                        'entry_date': entry_date,
-                        'exit_date': current_date,
-                        'position_type': 'long_spread' if position == 1 else 'short_spread',
-                        'entry_zscore': df['zscore'].loc[entry_date],
-                        'exit_zscore': current_zscore,
-                        'days_held': days_held,
-                        'pnl_pct': unrealized_pnl_pct * 100,
-                        'exit_reason': exit_reason,
-                        'leverage_used': leverage
+                        'entry_date': current_position['entry_date'],
+                        'exit_date': row['date'],
+                        'position_type': current_position['position_type'],
+                        'entry_zscore': current_position['entry_zscore'],
+                        'exit_zscore': row['zscore'],
+                        'pnl': final_pnl,
+                        'pnl_pct': (final_pnl / position_size) * 100,
+                        'exit_reason': row['action']
                     })
                     
-                    capital = final_value
-                    position = 0
-                
-                portfolio_values.append(current_value if position != 0 else capital)
+                    current_position = None
             
-            # Enhanced entry logic (more selective)
-            elif position == 0:
-                # Only enter if we have strong signals and sufficient capital
-                if capital >= 9000:  # Don't trade if capital too depleted
-                    
-                    # Enhanced entry conditions
-                    if current_zscore <= -entry_zscore and current_zscore <= -1.5:
-                        # Confirm signal strength with recent trend
-                        recent_zscores = df['zscore'].iloc[max(0, i-5):i]
-                        if len(recent_zscores) >= 3 and recent_zscores.mean() < -1.0:
-                            position = 1
-                            entry_price = df['spread'].iloc[i]
-                            entry_date = current_date
-                            capital *= (1 - total_transaction_cost)
-                    
-                    elif current_zscore >= entry_zscore and current_zscore >= 1.5:
-                        # Confirm signal strength with recent trend
-                        recent_zscores = df['zscore'].iloc[max(0, i-5):i]
-                        if len(recent_zscores) >= 3 and recent_zscores.mean() > 1.0:
-                            position = -1
-                            entry_price = df['spread'].iloc[i]
-                            entry_date = current_date
-                            capital *= (1 - total_transaction_cost)
-                
-                portfolio_values.append(capital)
-            else:
-                portfolio_values.append(portfolio_values[-1])
+            portfolio_values.append(capital)
         
-        return self._calculate_performance_metrics(capital, portfolio_values, trades)
-
-    def _calculate_performance_metrics(self, final_capital, portfolio_values, trades):
-        """Calculate comprehensive performance metrics"""
-        final_value = portfolio_values[-1]
-        total_return = (final_value - 10000) / 10000 * 100
+        # Calculate performance metrics
+        return self._calculate_backtest_metrics(initial_capital, capital, portfolio_values, trades)
+    
+    def _calculate_backtest_metrics(self, initial_capital, final_capital, portfolio_values, trades):
+        """Calculate comprehensive backtest metrics"""
+        
+        total_return = (final_capital - initial_capital) / initial_capital * 100
+        
+        if not trades:
+            return self._empty_backtest_results()
         
         trades_df = pd.DataFrame(trades)
         
-        if not trades_df.empty and len(trades_df) > 0:
-            win_rate = (trades_df['pnl_pct'] > 0).mean() * 100
-            avg_trade_pct = trades_df['pnl_pct'].mean()
-            avg_win_pct = trades_df[trades_df['pnl_pct'] > 0]['pnl_pct'].mean() if len(trades_df[trades_df['pnl_pct'] > 0]) > 0 else 0
-            avg_loss_pct = trades_df[trades_df['pnl_pct'] < 0]['pnl_pct'].mean() if len(trades_df[trades_df['pnl_pct'] < 0]) > 0 else 0
-            max_win = trades_df['pnl_pct'].max()
-            max_loss = trades_df['pnl_pct'].min()
-            
-            # Calculate additional metrics
-            profit_factor = abs(avg_win_pct * (win_rate/100)) / abs(avg_loss_pct * (1-win_rate/100)) if avg_loss_pct != 0 else float('inf')
-            
-        else:
-            win_rate = avg_trade_pct = avg_win_pct = avg_loss_pct = max_win = max_loss = profit_factor = 0
+        # Trade statistics
+        win_trades = trades_df[trades_df['pnl'] > 0]
+        loss_trades = trades_df[trades_df['pnl'] <= 0]
         
-        max_drawdown = self._calculate_max_drawdown(portfolio_values)
-        sharpe_ratio = self._calculate_sharpe_ratio(portfolio_values)
+        win_rate = len(win_trades) / len(trades_df) * 100
+        avg_win = win_trades['pnl'].mean() if len(win_trades) > 0 else 0
+        avg_loss = loss_trades['pnl'].mean() if len(loss_trades) > 0 else 0
+        
+        profit_factor = abs(avg_win * len(win_trades)) / abs(avg_loss * len(loss_trades)) if avg_loss != 0 else float('inf')
+        
+        # Risk metrics
+        portfolio_series = pd.Series(portfolio_values)
+        returns = portfolio_series.pct_change().dropna()
+        
+        max_drawdown = ((portfolio_series.cummax() - portfolio_series) / portfolio_series.cummax()).max() * 100
+        sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
         
         return {
             'total_return': total_return,
+            'final_capital': final_capital,
             'win_rate': win_rate,
             'num_trades': len(trades),
-            'avg_trade_pct': avg_trade_pct,
-            'avg_win_pct': avg_win_pct,
-            'avg_loss_pct': avg_loss_pct,
-            'max_win': max_win,
-            'max_loss': max_loss,
+            'avg_win': avg_win,
+            'avg_loss': avg_loss,
             'profit_factor': profit_factor,
             'max_drawdown': max_drawdown,
             'sharpe_ratio': sharpe_ratio,
             'portfolio_values': portfolio_values,
             'trades': trades_df,
-            'final_capital': final_capital
+            'best_trade': trades_df.loc[trades_df['pnl'].idxmax()] if len(trades_df) > 0 else None,
+            'worst_trade': trades_df.loc[trades_df['pnl'].idxmin()] if len(trades_df) > 0 else None
         }
-
-    def _empty_results(self):
-        """Return empty results for invalid backtests"""
+    
+    def _empty_backtest_results(self):
+        """Return empty backtest results"""
         return {
-            'total_return': -100, 'win_rate': 0, 'num_trades': 0, 'avg_trade_pct': 0,
-            'avg_win_pct': 0, 'avg_loss_pct': 0, 'max_win': 0, 'max_loss': 0,
-            'profit_factor': 0, 'max_drawdown': 100, 'sharpe_ratio': -2,
-            'portfolio_values': [10000], 'trades': pd.DataFrame(), 'final_capital': 0
+            'total_return': 0, 'final_capital': 10000, 'win_rate': 0, 'num_trades': 0,
+            'avg_win': 0, 'avg_loss': 0, 'profit_factor': 0, 'max_drawdown': 0,
+            'sharpe_ratio': 0, 'portfolio_values': [10000], 'trades': pd.DataFrame(),
+            'best_trade': None, 'worst_trade': None
         }
 
-    def _calculate_max_drawdown(self, portfolio_values):
-        """Calculate maximum drawdown"""
-        if len(portfolio_values) < 2:
-            return 0
-            
-        peak = portfolio_values[0]
-        max_dd = 0
-        
-        for value in portfolio_values[1:]:
-            if value > peak:
-                peak = value
-            drawdown = (peak - value) / peak
-            if drawdown > max_dd:
-                max_dd = drawdown
-                
-        return max_dd * 100
+# Page configuration
+st.set_page_config(page_title="Professional Pairs Trading", layout="wide")
 
-    def _calculate_sharpe_ratio(self, portfolio_values):
-        """Calculate Sharpe ratio"""
-        if len(portfolio_values) < 2:
-            return 0
-            
-        returns = pd.Series(portfolio_values).pct_change().dropna()
-        if len(returns) == 0 or returns.std() == 0:
-            return 0
-            
-        return (returns.mean() / returns.std()) * np.sqrt(252)
-
-    def optimize_for_maximum_profit(self, price1, price2, trading_timeframe_days=30):
-        """AI optimization focused ONLY on maximum profit - NO NEGATIVE RETURNS ALLOWED"""
-        
-        # Data validation and conversion
-        def robust_series_conversion(data, name):
-            if isinstance(data, pd.Series):
-                return data.dropna()
-            elif isinstance(data, pd.DataFrame):
-                if 'Close' in data.columns:
-                    return data['Close'].dropna()
-                else:
-                    return data.iloc[:, -1].dropna()
-            else:
-                return pd.Series(np.array(data).flatten()).dropna()
-        
-        price1 = robust_series_conversion(price1, "price1")
-        price2 = robust_series_conversion(price2, "price2")
-        
-        if len(price1) < 100 or len(price2) < 100:
-            raise ValueError(f"Insufficient data: {len(price1)} and {len(price2)} points. Need at least 100 points for reliable optimization.")
-        
-        st.info("🚀 AI PROFIT MAXIMIZER ACTIVATED - Scanning for ONLY profitable strategies...")
-        
-        # PROFIT-FOCUSED parameter grids
-        if trading_timeframe_days <= 7:
-            param_grid = {
-                'entry_zscore': [1.2, 1.5, 1.8, 2.0, 2.2, 2.5],
-                'exit_zscore': [0.1, 0.2, 0.3, 0.5, 0.7],
-                'zscore_window': [15, 20, 25, 30],
-                'stop_loss_pct': [2, 3, 4, 5],
-                'take_profit_pct': [5, 8, 12, 15, 20, 25],
-                'leverage': [3, 5, 8, 10, 12, 15],
-                'hedge_method': ['dollar_neutral', 'regression']
-            }
-        elif trading_timeframe_days <= 30:
-            param_grid = {
-                'entry_zscore': [1.5, 2.0, 2.5, 2.8, 3.0, 3.5],
-                'exit_zscore': [0.2, 0.3, 0.5, 0.8, 1.0],
-                'zscore_window': [20, 25, 30, 35, 40],
-                'stop_loss_pct': [3, 5, 7, 10],
-                'take_profit_pct': [8, 12, 15, 20, 25, 30],
-                'leverage': [2, 3, 5, 8, 10, 12],
-                'hedge_method': ['dollar_neutral', 'regression']
-            }
-        else:
-            param_grid = {
-                'entry_zscore': [2.0, 2.5, 3.0, 3.5, 4.0],
-                'exit_zscore': [0.3, 0.5, 1.0, 1.5],
-                'zscore_window': [30, 40, 50, 60],
-                'stop_loss_pct': [5, 8, 12, 15],
-                'take_profit_pct': [12, 18, 25, 30, 40],
-                'leverage': [2, 3, 5, 8],
-                'hedge_method': ['dollar_neutral', 'regression']
-            }
-        
-        profitable_strategies = []
-        param_combinations = list(ParameterGrid(param_grid))
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # Test extensive combinations
-        max_combinations = min(150, len(param_combinations))
-        best_return = -100
-        strategies_tested = 0
-        
-        for i, params in enumerate(param_combinations[:max_combinations]):
-            try:
-                df, hedge_ratio = self.calculate_spread_and_zscore(
-                    price1, price2, 
-                    zscore_window=params['zscore_window'],
-                    hedge_method=params['hedge_method']
-                )
-                
-                if df.empty or len(df) < 50:
-                    continue
-                
-                results = self.enhanced_backtest(
-                    df, 
-                    entry_zscore=params['entry_zscore'],
-                    exit_zscore=params['exit_zscore'],
-                    stop_loss_pct=params['stop_loss_pct'],
-                    take_profit_pct=params['take_profit_pct'],
-                    leverage=params['leverage'],
-                    max_hold_days=trading_timeframe_days
-                )
-                
-                strategies_tested += 1
-                
-                # STRICT PROFIT REQUIREMENTS - ONLY profitable strategies allowed
-                total_return = results['total_return']
-                win_rate = results['win_rate']
-                num_trades = results['num_trades']
-                profit_factor = results['profit_factor']
-                max_drawdown = results['max_drawdown']
-                
-                # MANDATORY PROFIT CRITERIA
-                meets_profit_criteria = (
-                    total_return >= self.min_profit_threshold and  # Minimum 15% return
-                    win_rate >= 55 and                            # Minimum 55% win rate
-                    num_trades >= 8 and                           # Minimum 8 trades for significance
-                    profit_factor >= 1.5 and                     # Profit factor > 1.5
-                    max_drawdown <= 35                            # Maximum 35% drawdown
-                )
-                
-                if meets_profit_criteria:
-                    # Calculate PROFIT-MAXIMIZING score
-                    profit_score = (
-                        total_return * 0.4 +                          # 40% weight on returns
-                        (win_rate - 50) * 0.8 +                      # 80 points per % above 50% win rate
-                        profit_factor * 10 +                          # Reward high profit factors
-                        max(0, 50 - max_drawdown) * 0.5 +            # Reward low drawdowns
-                        num_trades * 0.8 +                           # Reward more trades
-                        (results['avg_win_pct'] / max(abs(results['avg_loss_pct']), 0.1)) * 5  # Reward favorable win/loss ratio
-                    )
-                    
-                    # BONUS multipliers for exceptional strategies
-                    if total_return >= 30 and win_rate >= 70:
-                        profit_score *= 1.3  # 30% bonus for exceptional performance
-                    elif total_return >= 25 and win_rate >= 65:
-                        profit_score *= 1.2  # 20% bonus for excellent performance
-                    elif total_return >= 20 and win_rate >= 60:
-                        profit_score *= 1.1  # 10% bonus for good performance
-                    
-                    strategy_result = {**params, **results, 'profit_score': profit_score, 'hedge_ratio': hedge_ratio}
-                    profitable_strategies.append(strategy_result)
-                    
-                    if total_return > best_return:
-                        best_return = total_return
-                
-                # Enhanced progress display
-                progress_bar.progress((i + 1) / max_combinations)
-                profitable_count = len(profitable_strategies)
-                status_text.text(
-                    f"🔍 Tested: {i+1}/{max_combinations} | "
-                    f"💰 Profitable: {profitable_count} | "
-                    f"🚀 Best: {best_return:.1f}% | "
-                    f"⚡ Current: {total_return:.1f}%"
-                )
-                
-            except Exception as e:
-                continue
-        
-        progress_bar.empty()
-        status_text.empty()
-        
-        # Select the MOST PROFITABLE strategy
-        if not profitable_strategies:
-            # If no profitable strategies found, relax criteria slightly and try again
-            st.warning("No strategies met strict profit criteria. Searching with relaxed requirements...")
-            
-            self.min_profit_threshold = 10.0  # Lower to 10%
-            
-            # Quick search with relaxed criteria
-            for params in param_combinations[:50]:  # Try top 50 again with relaxed criteria
-                try:
-                    df, hedge_ratio = self.calculate_spread_and_zscore(
-                        price1, price2, 
-                        zscore_window=params['zscore_window'],
-                        hedge_method=params['hedge_method']
-                    )
-                    
-                    if df.empty:
-                        continue
-                    
-                    results = self.enhanced_backtest(
-                        df, 
-                        entry_zscore=params['entry_zscore'],
-                        exit_zscore=params['exit_zscore'],
-                        stop_loss_pct=params['stop_loss_pct'],
-                        take_profit_pct=params['take_profit_pct'],
-                        leverage=params['leverage'],
-                        max_hold_days=trading_timeframe_days
-                    )
-                    
-                    if (results['total_return'] >= 10.0 and 
-                        results['win_rate'] >= 50 and 
-                        results['num_trades'] >= 5):
-                        
-                        strategy_result = {**params, **results, 'hedge_ratio': hedge_ratio}
-                        profitable_strategies.append(strategy_result)
-                        
-                except:
-                    continue
-            
-            if not profitable_strategies:
-                raise ValueError(
-                    "❌ NO PROFITABLE STRATEGIES FOUND! This pair may not be suitable for pairs trading. "
-                    "Try:\n"
-                    "1. Different cryptocurrencies with higher correlation\n"
-                    "2. Different time periods\n"
-                    "3. Check if both cryptos have sufficient trading volume"
-                )
-        
-        # Select THE MOST PROFITABLE strategy
-        best_strategy = max(profitable_strategies, key=lambda x: x.get('profit_score', x['total_return']))
-        
-        self.optimal_params = {k: v for k, v in best_strategy.items() 
-                              if k in ['entry_zscore', 'exit_zscore', 'zscore_window', 'stop_loss_pct', 
-                                     'take_profit_pct', 'leverage', 'hedge_method', 'hedge_ratio']}
-        self.best_performance = best_strategy
-        
-        results_df = pd.DataFrame(profitable_strategies)
-        
-        st.success(f"🎯 PROFIT OPTIMIZATION COMPLETE! Found {len(profitable_strategies)} profitable strategies!")
-        st.info(f"💰 SELECTED STRATEGY: {best_strategy['total_return']:.1f}% return with {best_strategy['win_rate']:.1f}% win rate")
-        
-        return self.optimal_params, results_df
-
-# Initialize the enhanced trading system
+# Initialize trading system
 if 'trading_system' not in st.session_state:
-    st.session_state.trading_system = ProfitMaximizingPairsTrader()
+    st.session_state.trading_system = ProfessionalPairsTrader()
 
-trading_system = st.session_state.trading_system
+trader = st.session_state.trading_system
 
-# Enhanced Main Interface
-st.title("💰 PROFESSIONAL CRYPTO PAIRS TRADING SYSTEM")
-st.markdown("### *AI-Powered Profit Maximization - Only Profitable Strategies Allowed*")
+# Main header
+st.markdown('<div class="main-header"><h1>PROFESSIONAL PAIRS TRADING SYSTEM</h1><p>Quantitative Trading • Risk Management • Live Signals</p></div>', unsafe_allow_html=True)
 
-# Main tabs with enhanced functionality
-tab1, tab2, tab3, tab4 = st.tabs([
-    "🔍 Profit Analysis & AI Optimization", 
-    "💸 Live Trading Signals", 
-    "📊 Performance Dashboard",
-    "🎯 Strategy Comparison"
-])
+# Main tabs
+tab1, tab2, tab3, tab4 = st.tabs(["ANALYSIS", "SIGNALS", "PERFORMANCE", "CORRELATION"])
 
-# Tab 1: Enhanced Profit Analysis
+# Tab 1: Analysis
 with tab1:
-    st.header("🚀 AI Profit Maximizer")
-    st.markdown("*The system will ONLY select strategies with positive returns and high win rates*")
+    st.subheader("STRATEGY ANALYSIS")
     
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        crypto1 = st.selectbox("Primary Crypto:", list(tickers.keys()), index=0)
+        crypto1 = st.selectbox("PRIMARY ASSET:", list(CRYPTO_TICKERS.keys()), index=0)
     with col2:
-        remaining_cryptos = [c for c in tickers.keys() if c != crypto1]
-        crypto2 = st.selectbox("Secondary Crypto:", remaining_cryptos, index=1)
+        crypto2 = st.selectbox("SECONDARY ASSET:", [c for c in CRYPTO_TICKERS.keys() if c != crypto1], index=1)
     with col3:
-        timeframe_days = st.selectbox("Max Hold Period:", [7, 14, 30, 60], index=2)
+        analysis_period = st.selectbox("PERIOD:", ["6mo", "1y", "2y"], index=1)
     
-    # Enhanced analysis button
-    if st.button("🚀 ACTIVATE PROFIT MAXIMIZER", type="primary", use_container_width=True):
-        try:
-            with st.spinner("📡 Loading market data..."):
-                price1 = trading_system.load_data(crypto1, period='1y')
-                price2 = trading_system.load_data(crypto2, period='1y')
-            
-            if not price1.empty and not price2.empty and len(price1) > 100 and len(price2) > 100:
-                st.success(f"✅ Data loaded: {crypto1} ({len(price1)} points) | {crypto2} ({len(price2)} points)")
-                
-                # Run profit-focused optimization
-                with st.spinner("🤖 AI is scanning for maximum profit opportunities..."):
-                    optimal_params, all_results = trading_system.optimize_for_maximum_profit(
-                        price1, price2, timeframe_days
-                    )
-                
-                # Display results with enhanced styling
-                st.balloons()  # Celebration effect
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.markdown('<div class="profit-metric">', unsafe_allow_html=True)
-                    st.metric("💰 Expected Return", f"{trading_system.best_performance['total_return']:.1f}%", 
-                             delta=f"+{trading_system.best_performance['total_return']:.1f}%")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown('<div class="profit-metric">', unsafe_allow_html=True)
-                    st.metric("🎯 Win Rate", f"{trading_system.best_performance['win_rate']:.1f}%",
-                             delta="High Accuracy")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                with col3:
-                    st.markdown('<div class="profit-metric">', unsafe_allow_html=True)
-                    st.metric("⚡ Profit Factor", f"{trading_system.best_performance['profit_factor']:.2f}",
-                             delta="Profit/Loss Ratio")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with col4:
-                    st.markdown('<div class="profit-metric">', unsafe_allow_html=True)
-                    st.metric("🔥 Max Leverage", f"{optimal_params['leverage']}x",
-                             delta="Optimized Power")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Enhanced parameter display
-                st.markdown("---")
-                st.subheader("🎯 AI-OPTIMIZED PROFIT PARAMETERS")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.success(f"""
-                    **📈 Entry Strategy**
-                    - Entry Z-Score: ±{optimal_params['entry_zscore']:.1f}
-                    - Exit Z-Score: ±{optimal_params['exit_zscore']:.1f}
-                    - Window: {optimal_params['zscore_window']} periods
-                    """)
-                
-                with col2:
-                    st.info(f"""
-                    **⚡ Risk Management**
-                    - Max Leverage: {optimal_params['leverage']}x
-                    - Stop Loss: {optimal_params['stop_loss_pct']}%
-                    - Take Profit: {optimal_params['take_profit_pct']}%
-                    """)
-                
-                with col3:
-                    st.warning(f"""
-                    **📊 Expected Performance**
-                    - Total Trades: {trading_system.best_performance['num_trades']}
-                    - Avg Win: {trading_system.best_performance['avg_win_pct']:.2f}%
-                    - Max Drawdown: {trading_system.best_performance['max_drawdown']:.1f}%
-                    """)
-                
-                # Create enhanced visualizations
-                df, _ = trading_system.calculate_spread_and_zscore(
-                    price1, price2, 
-                    optimal_params['zscore_window'], 
-                    optimal_params['hedge_method']
-                )
-                
-                # Enhanced price chart
-                fig = go.Figure()
-                
-                # Normalize prices for better visualization
-                norm_price1 = (price1 / price1.iloc[0]) * 100
-                norm_price2 = (price2 / price2.iloc[0]) * 100
-                
-                fig.add_trace(go.Scatter(x=price1.index, y=norm_price1, name=f'{crypto1} (Normalized)', 
-                                       line=dict(color='#00ff88', width=3)))
-                fig.add_trace(go.Scatter(x=price2.index, y=norm_price2, name=f'{crypto2} (Normalized)', 
-                                       line=dict(color='#ff6b6b', width=3)))
-                
-                fig.update_layout(
-                    title=f"📈 {crypto1} vs {crypto2} - Normalized Price Movement",
-                    xaxis_title="Date",
-                    yaxis_title="Normalized Price (Base = 100)",
-                    height=450,
-                    plot_bgcolor='rgba(0,0,0,0.05)',
-                    paper_bgcolor='rgba(0,0,0,0)'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Enhanced Z-score chart with profit zones
-                fig_zscore = go.Figure()
-                
-                # Color-code the z-score based on profitability
-                colors = ['red' if z >= optimal_params['entry_zscore'] else 
-                         'blue' if z <= -optimal_params['entry_zscore'] else 
-                         'gray' for z in df['zscore']]
-                
-                fig_zscore.add_trace(go.Scatter(
-                    x=df.index, y=df['zscore'], name='Z-Score',
-                    line=dict(color='green', width=2),
-                    fill='tonexty'
-                ))
-                
-                # Add profit zones
-                fig_zscore.add_hrect(
-                    y0=optimal_params['entry_zscore'], y1=6,
-                    fillcolor="red", opacity=0.2,
-                    annotation_text="SHORT ENTRY ZONE", annotation_position="top right"
-                )
-                fig_zscore.add_hrect(
-                    y0=-6, y1=-optimal_params['entry_zscore'],
-                    fillcolor="blue", opacity=0.2,
-                    annotation_text="LONG ENTRY ZONE", annotation_position="bottom right"
-                )
-                fig_zscore.add_hrect(
-                    y0=-optimal_params['exit_zscore'], y1=optimal_params['exit_zscore'],
-                    fillcolor="green", opacity=0.1,
-                    annotation_text="PROFIT EXIT ZONE", annotation_position="top left"
-                )
-                
-                # Add threshold lines
-                fig_zscore.add_hline(y=optimal_params['entry_zscore'], line_dash="dash", 
-                                   line_color="red", line_width=3)
-                fig_zscore.add_hline(y=-optimal_params['entry_zscore'], line_dash="dash", 
-                                   line_color="blue", line_width=3)
-                fig_zscore.add_hline(y=optimal_params['exit_zscore'], line_dash="dot", 
-                                   line_color="green", line_width=2)
-                fig_zscore.add_hline(y=-optimal_params['exit_zscore'], line_dash="dot", 
-                                   line_color="green", line_width=2)
-                fig_zscore.add_hline(y=0, line_color="black", line_width=1)
-                
-                fig_zscore.update_layout(
-                    title="💰 Z-Score with PROFIT ZONES",
-                    xaxis_title="Date",
-                    yaxis_title="Z-Score",
-                    height=450,
-                    plot_bgcolor='rgba(0,0,0,0.05)',
-                    paper_bgcolor='rgba(0,0,0,0)'
-                )
-                
-                st.plotly_chart(fig_zscore, use_container_width=True)
-                
-                # Top profitable strategies table
-                if not all_results.empty:
-                    st.subheader("🏆 TOP PROFITABLE STRATEGIES")
-                    top_strategies = all_results.nlargest(10, 'total_return')[[
-                        'entry_zscore', 'exit_zscore', 'leverage', 'total_return', 
-                        'win_rate', 'profit_factor', 'num_trades', 'max_drawdown'
-                    ]].round(2)
-                    
-                    # Style the dataframe
-                    def highlight_best(s):
-                        if s.name == 'total_return':
-                            return ['background-color: lightgreen' if v == s.max() else '' for v in s]
-                        elif s.name == 'win_rate':
-                            return ['background-color: lightblue' if v == s.max() else '' for v in s]
-                        else:
-                            return ['' for v in s]
-                    
-                    styled_strategies = top_strategies.style.apply(highlight_best)
-                    st.dataframe(styled_strategies, use_container_width=True)
-            
-            else:
-                st.error("❌ Failed to load sufficient data. Try different cryptocurrencies!")
-                
-        except Exception as e:
-            st.error(f"❌ Error: {str(e)}")
-            if "NO PROFITABLE STRATEGIES FOUND" in str(e):
-                st.info("💡 **Suggestions:**")
-                st.info("- Try highly correlated pairs like BTC/ETH")
-                st.info("- Use longer time periods for more data")
-                st.info("- Check if both cryptos are actively traded")
-
-# Tab 2: Enhanced Live Trading Signals
-with tab2:
-    st.header("💸 LIVE TRADING SIGNALS")
-    
-    if hasattr(trading_system, 'optimal_params') and trading_system.optimal_params:
-        # Capital management section
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            capital = st.number_input("💰 Trading Capital (USDT):", 
-                                    min_value=500, max_value=1000000, value=10000, step=500)
-        with col2:
-            leverage_multiplier = st.slider("⚡ Leverage:", 
-                               min_value=1, max_value=trading_system.optimal_params['leverage'], 
-                               value=min(trading_system.optimal_params['leverage'], 5))
-        with col3:
-            risk_per_trade = st.slider("🎯 Risk per Trade (%):", 
-                                     min_value=0.5, max_value=5.0, value=2.0, step=0.5)
-        with col4:
-            auto_compound = st.checkbox("🔄 Auto Compound Profits", value=True)
+    if st.button("RUN ANALYSIS", type="primary", use_container_width=True):
         
-        # Get current market data
-        try:
-            current_price1 = trading_system.load_data(crypto1, period='5d').iloc[-1]
-            current_price2 = trading_system.load_data(crypto2, period='5d').iloc[-1]
+        with st.spinner("Loading market data..."):
+            price1 = load_crypto_data(crypto1, period=analysis_period)
+            price2 = load_crypto_data(crypto2, period=analysis_period)
+        
+        if not price1.empty and not price2.empty and len(price1) > 100:
             
-            # Calculate current signals
-            recent_data1 = trading_system.load_data(crypto1, period='3mo')
-            recent_data2 = trading_system.load_data(crypto2, period='3mo')
-            df_current, hedge_ratio = trading_system.calculate_spread_and_zscore(
-                recent_data1, recent_data2, 
-                trading_system.optimal_params['zscore_window'],
-                trading_system.optimal_params['hedge_method']
-            )
-            current_zscore = df_current['zscore'].iloc[-1]
+            # Calculate signals and backtest
+            df, hedge_ratio = trader.calculate_spread_and_signals(price1, price2)
+            signals = trader.generate_trading_signals(df)
+            backtest_results = trader.backtest_strategy(signals)
             
-            # Market status dashboard
-            st.markdown("---")
-            st.subheader("📊 REAL-TIME MARKET STATUS")
+            # Store results
+            trader.current_data = {
+                'crypto1': crypto1, 'crypto2': crypto2,
+                'price1': price1, 'price2': price2,
+                'df': df, 'hedge_ratio': hedge_ratio,
+                'signals': signals, 'backtest': backtest_results
+            }
             
-            col1, col2, col3, col4, col5 = st.columns(5)
+            # Display results
+            col1, col2, col3, col4 = st.columns(4)
+            
             with col1:
-                price_change_1 = ((current_price1 - recent_data1.iloc[-2]) / recent_data1.iloc[-2] * 100)
-                st.metric(f"💎 {crypto1}", f"${current_price1:.4f}", 
-                         delta=f"{price_change_1:.2f}%")
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("TOTAL RETURN", f"{backtest_results['total_return']:.1f}%")
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                price_change_2 = ((current_price2 - recent_data2.iloc[-2]) / recent_data2.iloc[-2] * 100)
-                st.metric(f"🚀 {crypto2}", f"${current_price2:.4f}", 
-                         delta=f"{price_change_2:.2f}%")
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("WIN RATE", f"{backtest_results['win_rate']:.1f}%")
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col3:
-                zscore_status = "🔥 STRONG" if abs(current_zscore) >= trading_system.optimal_params['entry_zscore'] else "⏳ WAITING"
-                st.metric("📈 Current Z-Score", f"{current_zscore:.2f}", delta=zscore_status)
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("PROFIT FACTOR", f"{backtest_results['profit_factor']:.2f}")
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col4:
-                st.metric("🎯 Entry Threshold", f"±{trading_system.optimal_params['entry_zscore']:.1f}")
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("MAX DRAWDOWN", f"{backtest_results['max_drawdown']:.1f}%")
+                st.markdown('</div>', unsafe_allow_html=True)
             
-            with col5:
-                spread_current = df_current['spread'].iloc[-1]
-                spread_change = ((spread_current - df_current['spread'].iloc[-2]) / abs(df_current['spread'].iloc[-2]) * 100)
-                st.metric("📊 Spread", f"{spread_current:.6f}", delta=f"{spread_change:.2f}%")
-            
-            # Signal generation and position sizing
-            signal_type = None
-            if current_zscore <= -trading_system.optimal_params['entry_zscore']:
-                signal_type = "LONG_SPREAD"
-            elif current_zscore >= trading_system.optimal_params['entry_zscore']:
-                signal_type = "SHORT_SPREAD"
-            
-            # Enhanced signal display
-            st.markdown("---")
-            
-            if signal_type:
-                # Calculate optimal position sizes
-                effective_capital = capital * (risk_per_trade / 100)
-                leveraged_position = effective_capital * leverage_multiplier
-                
-                # Position allocation based on hedge method
-                if trading_system.optimal_params['hedge_method'] == 'regression':
-                    hedge_ratio = abs(trading_system.optimal_params.get('hedge_ratio', 1.0))
-                    total_ratio = 1 + hedge_ratio
-                    crypto1_allocation = leveraged_position / total_ratio
-                    crypto2_allocation = crypto1_allocation * hedge_ratio
-                else:
-                    # Dollar neutral
-                    crypto1_allocation = leveraged_position / 2
-                    crypto2_allocation = leveraged_position / 2
-                
-                crypto1_qty = crypto1_allocation / current_price1
-                crypto2_qty = crypto2_allocation / current_price2
-                
-                if signal_type == "LONG_SPREAD":
-                    st.markdown('<div class="profit-signal">🚀 LONG SPREAD SIGNAL - HIGH PROFIT OPPORTUNITY! 🚀</div>', 
-                               unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.success(f"""
-                        ### 💰 BUY {crypto1}
-                        **📊 Action:** Market Buy Order  
-                        **💎 Quantity:** {crypto1_qty:.8f} {crypto1}  
-                        **💵 Value:** ${crypto1_allocation:.2f} USDT  
-                        **📈 Price:** ${current_price1:.4f}  
-                        **⚡ Leverage:** {leverage_multiplier}x  
-                        
-                        **Expected Profit:** {trading_system.optimal_params['take_profit_pct']}%
-                        """)
-                    
-                    with col2:
-                        st.error(f"""
-                        ### 📉 SELL {crypto2} (SHORT)
-                        **📊 Action:** Futures Short Position  
-                        **💎 Quantity:** {crypto2_qty:.8f} {crypto2}  
-                        **💵 Value:** ${crypto2_allocation:.2f} USDT  
-                        **📈 Price:** ${current_price2:.4f}  
-                        **⚡ Leverage:** {leverage_multiplier}x  
-                        
-                        **Margin Required:** ${crypto2_allocation/leverage_multiplier:.2f}
-                        """)
-                
-                else:  # SHORT_SPREAD
-                    st.markdown('<div class="profit-signal">🔥 SHORT SPREAD SIGNAL - HIGH PROFIT OPPORTUNITY! 🔥</div>', 
-                               unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.error(f"""
-                        ### 📉 SELL {crypto1} (SHORT)
-                        **📊 Action:** Futures Short Position  
-                        **💎 Quantity:** {crypto1_qty:.8f} {crypto1}  
-                        **💵 Value:** ${crypto1_allocation:.2f} USDT  
-                        **📈 Price:** ${current_price1:.4f}  
-                        **⚡ Leverage:** {leverage_multiplier}x  
-                        
-                        **Margin Required:** ${crypto1_allocation/leverage_multiplier:.2f}
-                        """)
-                    
-                    with col2:
-                        st.success(f"""
-                        ### 💰 BUY {crypto2}
-                        **📊 Action:** Market Buy Order  
-                        **💎 Quantity:** {crypto2_qty:.8f} {crypto2}  
-                        **💵 Value:** ${crypto2_allocation:.2f} USDT  
-                        **📈 Price:** ${current_price2:.4f}  
-                        **⚡ Leverage:** {leverage_multiplier}x  
-                        
-                        **Expected Profit:** {trading_system.optimal_params['take_profit_pct']}%
-                        """)
-                
-                # Advanced risk management display
-                st.markdown("---")
-                st.subheader("🛡️ ADVANCED RISK MANAGEMENT")
-                
-                expected_profit = leveraged_position * (trading_system.optimal_params['take_profit_pct'] / 100)
-                max_loss = leveraged_position * (trading_system.optimal_params['stop_loss_pct'] / 100)
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.success(f"""
-                    **🎯 TAKE PROFIT**  
-                    Exit Z-Score: ±{trading_system.optimal_params['exit_zscore']:.1f}  
-                    Expected Profit: **${expected_profit:.2f}**  
-                    Target Return: **{trading_system.optimal_params['take_profit_pct']}%**
-                    """)
-                
-                with col2:
-                    st.error(f"""
-                    **🛑 STOP LOSS**  
-                    Max Loss: **{trading_system.optimal_params['stop_loss_pct']}%**  
-                    Max Loss Amount: **${max_loss:.2f}**  
-                    Risk/Reward: **1:{trading_system.optimal_params['take_profit_pct']/trading_system.optimal_params['stop_loss_pct']:.1f}**
-                    """)
-                
-                with col3:
-                    st.warning(f"""
-                    **⏰ TIME EXIT**  
-                    Max Hold: **{timeframe_days} days**  
-                    Auto-exit: **Enabled**  
-                    Reason: **Prevent correlation breakdown**
-                    """)
-                
-                with col4:
-                    st.info(f"""
-                    **📊 POSITION SUMMARY**  
-                    Total Position: **${leveraged_position:.2f}**  
-                    Margin Used: **${leveraged_position/leverage_multiplier:.2f}**  
-                    Win Probability: **{trading_system.best_performance['win_rate']:.1f}%**
-                    """)
-                
-                # Profit calculator
-                st.markdown("---")
-                st.subheader("💰 PROFIT CALCULATOR")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    profit_scenarios = pd.DataFrame({
-                        'Scenario': ['Conservative (2%)', 'Expected Target', 'Aggressive (8%)', 'Maximum (15%)'],
-                        'Profit %': ['2%', f"{trading_system.optimal_params['take_profit_pct']}%", '8%', '15%'],
-                        'Profit Amount': [f"${leveraged_position * 0.02:.2f}", 
-                                        f"${expected_profit:.2f}",
-                                        f"${leveraged_position * 0.08:.2f}",
-                                        f"${leveraged_position * 0.15:.2f}"],
-                        'Total Value': [f"${capital + leveraged_position * 0.02:.2f}",
-                                      f"${capital + expected_profit:.2f}",
-                                      f"${capital + leveraged_position * 0.08:.2f}",
-                                      f"${capital + leveraged_position * 0.15:.2f}"]
-                    })
-                    st.dataframe(profit_scenarios, use_container_width=True, hide_index=True)
-                
-                with col2:
-                    # Quick stats
-                    st.info(f"""
-                    **🎯 STRATEGY STATS**  
-                    Historical Win Rate: **{trading_system.best_performance['win_rate']:.1f}%**  
-                    Average Win: **{trading_system.best_performance.get('avg_win_pct', 0):.2f}%**  
-                    Profit Factor: **{trading_system.best_performance.get('profit_factor', 0):.2f}**  
-                    Max Drawdown: **{trading_system.best_performance['max_drawdown']:.1f}%**
-                    """)
-            
-            else:
-                st.markdown('<div class="no-signal">⏳ NO SIGNAL - MONITORING FOR OPPORTUNITIES</div>', 
-                           unsafe_allow_html=True)
-                
-                # Distance to signals
-                distance_to_long = abs(current_zscore + trading_system.optimal_params['entry_zscore'])
-                distance_to_short = abs(current_zscore - trading_system.optimal_params['entry_zscore'])
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.info(f"""
-                    ### 📊 SIGNAL DISTANCE MONITOR
-                    **Current Z-Score:** {current_zscore:.2f}  
-                    
-                    **🔵 Long Signal Distance:** {distance_to_long:.2f} points  
-                    **🔴 Short Signal Distance:** {distance_to_short:.2f} points  
-                    
-                    **Next Signal:** {"Long" if distance_to_long < distance_to_short else "Short"}  
-                    **Distance:** {min(distance_to_long, distance_to_short):.2f} points away
-                    """)
-                
-                with col2:
-                    st.warning(f"""
-                    ### 🔔 PRICE ALERTS SETUP
-                    **Set alerts for:**  
-                    - Z-Score ≤ **-{trading_system.optimal_params['entry_zscore']:.1f}** (Long Entry)  
-                    - Z-Score ≥ **+{trading_system.optimal_params['entry_zscore']:.1f}** (Short Entry)  
-                    
-                    **Expected Profit:** {trading_system.best_performance['total_return']:.1f}% per cycle  
-                    **Win Rate:** {trading_system.best_performance['win_rate']:.1f}%
-                    """)
-        
-        except Exception as e:
-            st.error(f"Error getting market data: {str(e)}")
-    
-    else:
-        st.warning("⚠️ Please run the Profit Analysis first!")
-        st.info("Go to the 'Profit Analysis & AI Optimization' tab to find profitable strategies.")
-
-# Continue with remaining tabs...
-# Tab 3: Enhanced Performance Dashboard  
-with tab3:
-    st.header("📊 PERFORMANCE DASHBOARD")
-    
-    if hasattr(trading_system, 'best_performance') and trading_system.best_performance:
-        # Key performance indicators
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            st.metric("💰 Total Return", 
-                     f"{trading_system.best_performance['total_return']:.1f}%",
-                     delta=f"+{trading_system.best_performance['total_return']:.1f}%")
-        
-        with col2:
-            st.metric("🎯 Win Rate", 
-                     f"{trading_system.best_performance['win_rate']:.1f}%",
-                     delta=f"vs 50% random")
-        
-        with col3:
-            st.metric("⚡ Profit Factor", 
-                     f"{trading_system.best_performance.get('profit_factor', 0):.2f}",
-                     delta="Profit/Loss Ratio")
-        
-        with col4:
-            st.metric("📈 Sharpe Ratio", 
-                     f"{trading_system.best_performance['sharpe_ratio']:.2f}",
-                     delta="Risk-Adj Return")
-        
-        with col5:
-            st.metric("📉 Max Drawdown", 
-                     f"{trading_system.best_performance['max_drawdown']:.1f}%",
-                     delta="Maximum Loss")
-        
-        # Strategy vs benchmarks
-        st.markdown("---")
-        st.subheader("🏆 STRATEGY vs BENCHMARKS")
-        
-        # For demo purposes, we'll use placeholder benchmark data
-        crypto1_return = 25.0  # Placeholder
-        crypto2_return = 15.0  # Placeholder
-        portfolio_50_50 = (crypto1_return + crypto2_return) / 2
-        portfolio_60_40 = (crypto1_return * 0.6) + (crypto2_return * 0.4)
-        
-        # Comparison table
-        comparison_data = {
-            'Strategy': [
-                '🤖 AI Pairs Trading',
-                f'💎 {crypto1} Hold',
-                f'🚀 {crypto2} Hold', 
-                '📊 50/50 Portfolio',
-                '📈 60/40 Portfolio'
-            ],
-            'Return (%)': [
-                f"{trading_system.best_performance['total_return']:.1f}%",
-                f"{crypto1_return:.1f}%",
-                f"{crypto2_return:.1f}%",
-                f"{portfolio_50_50:.1f}%",
-                f"{portfolio_60_40:.1f}%"
-            ],
-            'Win Rate (%)': [
-                f"{trading_system.best_performance['win_rate']:.1f}%",
-                "N/A", "N/A", "N/A", "N/A"
-            ],
-            'Max Drawdown (%)': [
-                f"{trading_system.best_performance['max_drawdown']:.1f}%",
-                "~50%", "~50%", "~45%", "~45%"
-            ],
-            'Risk Level': [
-                "Medium", "High", "High", "High", "High"
-            ]
-        }
-        
-        comparison_df = pd.DataFrame(comparison_data)
-        
-        # Style the comparison table
-        def highlight_best_performance(row):
-            if row.name == 0:  # AI strategy row
-                return ['background-color: lightgreen'] * len(row)
-            else:
-                return [''] * len(row)
-        
-        styled_comparison = comparison_df.style.apply(highlight_best_performance, axis=1)
-        st.dataframe(styled_comparison, use_container_width=True, hide_index=True)
-        
-        # Performance advantage calculation
-        best_benchmark = max(crypto1_return, crypto2_return, portfolio_50_50, portfolio_60_40)
-        ai_advantage = trading_system.best_performance['total_return'] - best_benchmark
-        
-        if ai_advantage > 0:
-            st.success(f"""
-            ### 🎉 AI STRATEGY ADVANTAGE: +{ai_advantage:.1f}%
-            The AI strategy outperforms the best benchmark by **{ai_advantage:.1f} percentage points**!
-            
-            **Additional Benefits:**
-            - ✅ Market neutral (works in bull AND bear markets)
-            - ✅ Lower volatility than buy & hold
-            - ✅ Controlled risk with stop losses  
-            - ✅ Consistent profit opportunities
-            """)
-        else:
-            st.info(f"""
-            ### Strategy Performance: {ai_advantage:.1f}%
-            While the strategy may underperform in raw returns, it offers:
-            - ✅ Much lower risk and volatility
-            - ✅ Market neutral exposure
-            - ✅ Consistent performance regardless of market direction
-            """)
-        
-        # Equity curve visualization
-        if trading_system.best_performance.get('portfolio_values'):
-            st.markdown("---")
-            st.subheader("📈 STRATEGY EQUITY CURVE")
-            
-            portfolio_values = trading_system.best_performance['portfolio_values']
-            dates = pd.date_range(start='2023-01-01', periods=len(portfolio_values), freq='D')
-            
-            fig_equity = go.Figure()
-            
-            # AI strategy line
-            fig_equity.add_trace(go.Scatter(
-                x=dates, y=portfolio_values,
-                name='🤖 AI Pairs Strategy',
-                line=dict(color='#00ff88', width=4),
-                fill='tonexty'
-            ))
-            
-            # Add buy & hold comparison
-            benchmark_values = [10000 * (1 + i * portfolio_50_50/100/len(portfolio_values)) 
-                              for i in range(len(portfolio_values))]
-            fig_equity.add_trace(go.Scatter(
-                x=dates, y=benchmark_values,
-                name='📊 50/50 Buy & Hold',
-                line=dict(color='#ff6b6b', width=3, dash='dash')
-            ))
-            
-            # Add drawdown zones
-            peaks = pd.Series(portfolio_values).cummax()
-            drawdowns = (pd.Series(portfolio_values) - peaks) / peaks * 100
-            
-            fig_equity.add_trace(go.Scatter(
-                x=dates, y=peaks,
-                name='Peak Values',
-                line=dict(color='gold', width=1, dash='dot'),
-                showlegend=False
-            ))
-            
-            fig_equity.update_layout(
-                title="📊 Strategy Performance vs Benchmark",
-                xaxis_title="Date",
-                yaxis_title="Portfolio Value ($)",
-                height=500,
-                plot_bgcolor='rgba(0,0,0,0.02)',
-                paper_bgcolor='rgba(0,0,0,0)'
+            # Charts
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=[f'{crypto1} vs {crypto2} - Normalized Prices', 'Z-Score & Trading Signals'],
+                vertical_spacing=0.1
             )
             
-            st.plotly_chart(fig_equity, use_container_width=True)
-    
-    else:
-        st.warning("⚠️ No performance data available. Run the analysis first!")
-        st.info("Complete the profit analysis to see detailed performance metrics.")
+            # Price chart (normalized)
+            norm_price1 = price1 / price1.iloc[0] * 100
+            norm_price2 = price2 / price2.iloc[0] * 100
+            
+            fig.add_trace(go.Scatter(x=price1.index, y=norm_price1, name=crypto1, line=dict(color='#00ff41')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=price2.index, y=norm_price2, name=crypto2, line=dict(color='#ff4444')), row=1, col=1)
+            
+            # Z-score chart
+            fig.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-Score', line=dict(color='#00ffff')), row=2, col=1)
+            fig.add_hline(y=2.0, line_dash="dash", line_color="#ff4444", row=2, col=1)
+            fig.add_hline(y=-2.0, line_dash="dash", line_color="#00ff41", row=2, col=1)
+            fig.add_hline(y=0, line_color="#666666", row=2, col=1)
+            
+            fig.update_layout(height=600, plot_bgcolor='#000000', paper_bgcolor='#000000', font_color='#00ff41')
+            st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.error("Insufficient data for analysis")
 
-# Tab 4: Strategy Comparison
-with tab4:
-    st.header("🎯 STRATEGY COMPARISON & INSIGHTS")
+# Tab 2: Live Signals
+with tab2:
+    st.subheader("LIVE TRADING SIGNALS")
     
-    if hasattr(trading_system, 'best_performance') and trading_system.best_performance:
-        # Strategy overview
-        st.subheader("🔍 CURRENT STRATEGY OVERVIEW")
+    if 'current_data' in trader.__dict__ and trader.current_data:
+        
+        # Get latest signal
+        signals = trader.current_data['signals']
+        if not signals.empty:
+            latest_signal = signals.iloc[-1]
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.markdown("### CURRENT MARKET STATUS")
+                
+                current_zscore = latest_signal['zscore']
+                
+                if latest_signal['action'] in ['ENTER_LONG', 'ENTER_SHORT']:
+                    st.markdown('<div class="profit-alert">ACTIVE SIGNAL DETECTED</div>', unsafe_allow_html=True)
+                    
+                    # Position details
+                    position_info = trader.calculate_position_sizing(latest_signal, 10000)
+                    
+                    if position_info:
+                        st.markdown(f"""
+                        **SIGNAL TYPE:** {latest_signal['action']}  
+                        **Z-SCORE:** {current_zscore:.2f}  
+                        **ENTRY PRICE:** ${latest_signal['entry_price']:.6f}  
+                        **STOP LOSS:** Z-Score {latest_signal['stop_loss']:.1f}  
+                        **TAKE PROFIT:** Z-Score {latest_signal['take_profit']:.1f}  
+                        """)
+                        
+                        st.markdown("### POSITION SIZING")
+                        st.markdown(f"""
+                        **{trader.current_data['crypto1']}:** {position_info['asset1_action']} {position_info['asset1_quantity']:.6f}  
+                        **{trader.current_data['crypto2']}:** {position_info['asset2_action']} {position_info['asset2_quantity']:.6f}  
+                        **TOTAL EXPOSURE:** ${position_info['total_exposure']:.2f}  
+                        **MARGIN REQUIRED:** ${position_info['margin_required']:.2f}  
+                        """)
+                
+                else:
+                    st.markdown('<div class="neutral-alert">NO ACTIVE SIGNAL</div>', unsafe_allow_html=True)
+                    st.markdown(f"**CURRENT Z-SCORE:** {current_zscore:.2f}")
+                    st.markdown(f"**DISTANCE TO SIGNAL:** {abs(2.0 - abs(current_zscore)):.2f}")
+            
+            with col2:
+                st.markdown("### SIGNAL HISTORY")
+                
+                # Show recent entry/exit signals
+                action_signals = signals[signals['action'].isin(['ENTER_LONG', 'ENTER_SHORT', 'EXIT_LONG', 'EXIT_SHORT'])].tail(10)
+                
+                if not action_signals.empty:
+                    for idx, sig in action_signals.iterrows():
+                        color = "#00ff41" if "ENTER" in sig['action'] else "#ff4444"
+                        st.markdown(f"<span style='color: {color}'>{sig['date'].strftime('%Y-%m-%d %H:%M')} - {sig['action']} (Z: {sig['zscore']:.2f})</span>", unsafe_allow_html=True)
+        
+        # Risk management panel
+        st.markdown("---")
+        st.markdown("### RISK MANAGEMENT")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.info(f"""
-            **🎯 Selected Strategy Details**
-            - Pair: {crypto1}/{crypto2}
-            - Entry Threshold: ±{trading_system.optimal_params['entry_zscore']:.1f}
-            - Exit Threshold: ±{trading_system.optimal_params['exit_zscore']:.1f}
-            - Leverage: {trading_system.optimal_params['leverage']}x
-            - Stop Loss: {trading_system.optimal_params['stop_loss_pct']}%
-            - Take Profit: {trading_system.optimal_params['take_profit_pct']}%
-            """)
-        
+            capital = st.number_input("TRADING CAPITAL ($)", value=10000, min_value=1000, step=1000)
         with col2:
-            st.success(f"""
-            **📈 Performance Metrics**
-            - Total Return: {trading_system.best_performance['total_return']:.1f}%
-            - Win Rate: {trading_system.best_performance['win_rate']:.1f}%
-            - Profit Factor: {trading_system.best_performance.get('profit_factor', 0):.2f}
-            - Sharpe Ratio: {trading_system.best_performance['sharpe_ratio']:.2f}
-            - Max Drawdown: {trading_system.best_performance['max_drawdown']:.1f}%
-            - Total Trades: {trading_system.best_performance['num_trades']}
-            """)
-        
+            risk_per_trade = st.slider("RISK PER TRADE (%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
         with col3:
-            st.warning(f"""
-            **⚡ Risk Assessment**
-            - Risk Level: {'High' if trading_system.optimal_params['leverage'] > 5 else 'Medium'}
-            - Volatility: {'High' if trading_system.best_performance['max_drawdown'] > 25 else 'Medium'}
-            - Correlation Risk: {'Medium' if trading_system.optimal_params['hedge_method'] == 'regression' else 'Low'}
-            - Time Risk: {timeframe_days} days max hold
-            - Market Risk: Market Neutral
-            """)
+            max_leverage = st.slider("MAX LEVERAGE", min_value=1, max_value=5, value=3, step=1)
+    
+    else:
+        st.warning("Run analysis first to generate signals")
+
+# Tab 3: Performance
+with tab3:
+    st.subheader("PERFORMANCE ANALYSIS")
+    
+    if 'current_data' in trader.__dict__ and trader.current_data:
+        backtest = trader.current_data['backtest']
         
-        # Alternative strategies comparison
-        st.markdown("---")
-        st.subheader("🔄 ALTERNATIVE STRATEGY SCENARIOS")
+        # Performance metrics
+        col1, col2, col3, col4, col5 = st.columns(5)
         
-        scenarios = {
-            "Conservative": {
-                "leverage": 2,
-                "risk_per_trade": 1.5,
-                "expected_return": trading_system.best_performance['total_return'] * 0.6,
-                "max_drawdown": trading_system.best_performance['max_drawdown'] * 0.7,
-                "description": "Lower leverage, smaller positions, safer approach"
-            },
-            "Moderate": {
-                "leverage": trading_system.optimal_params['leverage'],
-                "risk_per_trade": 2.0,
-                "expected_return": trading_system.best_performance['total_return'],
-                "max_drawdown": trading_system.best_performance['max_drawdown'],
-                "description": "AI-optimized parameters (recommended)"
-            },
-            "Aggressive": {
-                "leverage": min(20, trading_system.optimal_params['leverage'] * 1.5),
-                "risk_per_trade": 3.5,
-                "expected_return": trading_system.best_performance['total_return'] * 1.4,
-                "max_drawdown": trading_system.best_performance['max_drawdown'] * 1.3,
-                "description": "Higher leverage, larger positions, higher risk/reward"
-            }
-        }
-        
-        scenario_data = []
-        for name, data in scenarios.items():
-            scenario_data.append({
-                'Strategy': name,
-                'Leverage': f"{data['leverage']}x",
-                'Risk/Trade': f"{data['risk_per_trade']}%",
-                'Expected Return': f"{data['expected_return']:.1f}%",
-                'Max Drawdown': f"{data['max_drawdown']:.1f}%",
-                'Risk Level': 'Low' if name == 'Conservative' else 'Medium' if name == 'Moderate' else 'High',
-                'Description': data['description']
-            })
-        
-        scenario_df = pd.DataFrame(scenario_data)
-        
-        # Highlight the recommended strategy
-        def highlight_recommended(row):
-            if row['Strategy'] == 'Moderate':
-                return ['background-color: lightgreen'] * len(row)
-            return [''] * len(row)
-        
-        styled_scenarios = scenario_df.style.apply(highlight_recommended, axis=1)
-        st.dataframe(styled_scenarios, use_container_width=True, hide_index=True)
-        
-        # Strategy recommendations based on user profile
-        st.markdown("---")
-        st.subheader("👤 PERSONALIZED STRATEGY RECOMMENDATIONS")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            user_experience = st.selectbox("Your Trading Experience:", 
-                                         ["Beginner", "Intermediate", "Advanced", "Professional"])
-            risk_tolerance = st.selectbox("Risk Tolerance:", 
-                                        ["Conservative", "Moderate", "Aggressive", "Very Aggressive"])
-            capital_size = st.selectbox("Trading Capital:", 
-                                      ["<$5K", "$5K-$25K", "$25K-$100K", ">$100K"])
-        
-        with col2:
-            # Generate personalized recommendation
-            if user_experience == "Beginner" or risk_tolerance == "Conservative":
-                recommended_strategy = "Conservative"
-                rec_color = "success"
-            elif user_experience == "Professional" and risk_tolerance == "Very Aggressive":
-                recommended_strategy = "Aggressive"
-                rec_color = "warning"
-            else:
-                recommended_strategy = "Moderate"
-                rec_color = "info"
-            
-            recommended_data = scenarios[recommended_strategy]
-            
-            if rec_color == "success":
-                st.success(f"""
-                ### ✅ RECOMMENDED FOR YOU: {recommended_strategy.upper()}
-                
-                **Based on your profile:**
-                - Experience: {user_experience}
-                - Risk Tolerance: {risk_tolerance}
-                - Capital: {capital_size}
-                
-                **Strategy Details:**
-                - Leverage: {recommended_data['leverage']}x
-                - Risk per Trade: {recommended_data['risk_per_trade']}%
-                - Expected Return: {recommended_data['expected_return']:.1f}%
-                - Max Drawdown: {recommended_data['max_drawdown']:.1f}%
-                
-                {recommended_data['description']}
-                """)
-            elif rec_color == "info":
-                st.info(f"""
-                ### 💡 RECOMMENDED FOR YOU: {recommended_strategy.upper()}
-                
-                **Based on your profile:**
-                - Experience: {user_experience}
-                - Risk Tolerance: {risk_tolerance}
-                - Capital: {capital_size}
-                
-                **Strategy Details:**
-                - Leverage: {recommended_data['leverage']}x
-                - Risk per Trade: {recommended_data['risk_per_trade']}%
-                - Expected Return: {recommended_data['expected_return']:.1f}%
-                - Max Drawdown: {recommended_data['max_drawdown']:.1f}%
-                
-                {recommended_data['description']}
-                """)
-            else:
-                st.warning(f"""
-                ### ⚠️ RECOMMENDED FOR YOU: {recommended_strategy.upper()}
-                
-                **Based on your profile:**
-                - Experience: {user_experience}
-                - Risk Tolerance: {risk_tolerance}
-                - Capital: {capital_size}
-                
-                **Strategy Details:**
-                - Leverage: {recommended_data['leverage']}x
-                - Risk per Trade: {recommended_data['risk_per_trade']}%
-                - Expected Return: {recommended_data['expected_return']:.1f}%
-                - Max Drawdown: {recommended_data['max_drawdown']:.1f}%
-                
-                **⚠️ HIGH RISK:** {recommended_data['description']}
-                """)
-        
-        # Market conditions impact
-        st.markdown("---")
-        st.subheader("🌍 MARKET CONDITIONS IMPACT")
-        
-        market_scenarios = pd.DataFrame({
-            'Market Condition': ['Bull Market', 'Bear Market', 'Sideways Market', 'High Volatility', 'Low Volatility'],
-            'Strategy Performance': ['Good', 'Excellent', 'Excellent', 'Good', 'Fair'],
-            'Expected Impact': ['+10% to returns', '+20% to returns', 'Optimal conditions', 
-                              'Higher drawdowns', 'Fewer signals'],
-            'Recommendation': ['Use moderate leverage', 'Increase position size', 'Full optimization', 
-                             'Reduce leverage', 'Be patient']
-        })
-        
-        st.dataframe(market_scenarios, use_container_width=True, hide_index=True)
-        
-        # Final strategy summary
-        st.markdown("---")
-        st.subheader("📋 STRATEGY IMPLEMENTATION CHECKLIST")
-        
-        checklist_items = [
-            "✅ Analyzed and optimized the trading pair",
-            "✅ Set up risk management parameters", 
-            "✅ Determined position sizing based on capital",
-            "✅ Configured stop loss and take profit levels",
-            "⏳ Set up price alerts for entry signals",
-            "⏳ Prepare trading capital and exchange accounts",
-            "⏳ Test with small positions first",
-            "⏳ Monitor and adjust based on performance"
+        metrics = [
+            ("TOTAL RETURN", f"{backtest['total_return']:.1f}%"),
+            ("WIN RATE", f"{backtest['win_rate']:.1f}%"),
+            ("NUM TRADES", f"{backtest['num_trades']}"),
+            ("PROFIT FACTOR", f"{backtest['profit_factor']:.2f}"),
+            ("SHARPE RATIO", f"{backtest['sharpe_ratio']:.2f}")
         ]
         
-        col1, col2 = st.columns(2)
+        for col, (label, value) in zip([col1, col2, col3, col4, col5], metrics):
+            with col:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric(label, value)
+                st.markdown('</div>', unsafe_allow_html=True)
         
-        with col1:
-            for item in checklist_items[:4]:
-                st.write(item)
+        # Equity curve
+        portfolio_values = backtest['portfolio_values']
+        dates = pd.date_range(start='2023-01-01', periods=len(portfolio_values), freq='D')
         
-        with col2:
-            for item in checklist_items[4:]:
-                st.write(item)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=dates, y=portfolio_values,
+            name='Portfolio Value',
+            line=dict(color='#00ff41', width=2)
+        ))
         
-        # Final warnings and disclaimers
-        st.markdown("---")
-        st.error(f"""
-        ### ⚠️ IMPORTANT DISCLAIMERS & WARNINGS
+        fig.update_layout(
+            title="PORTFOLIO EQUITY CURVE",
+            xaxis_title="DATE",
+            yaxis_title="VALUE ($)",
+            plot_bgcolor='#000000',
+            paper_bgcolor='#000000',
+            font_color='#00ff41',
+            height=400
+        )
         
-        **RISK WARNING:** 
-        - Past performance does not guarantee future results
-        - Cryptocurrency trading involves substantial risk of loss
-        - Never invest more than you can afford to lose completely
-        - Leverage amplifies both gains and losses
-        - Markets can remain irrational longer than you can remain solvent
+        st.plotly_chart(fig, use_container_width=True)
         
-        **TECHNICAL RISKS:**
-        - Algorithm performance may degrade in changing market conditions
-        - Correlation between pairs can break down unexpectedly
-        - High frequency trading may face slippage and execution risks
-        - System failures or internet outages can impact trading
-        
-        **REGULATORY RISKS:**
-        - Cryptocurrency regulations vary by jurisdiction
-        - Tax implications may apply to trading profits
-        - Some jurisdictions may restrict leveraged crypto trading
-        
-        This software is for educational and informational purposes only. 
-        Always consult with qualified financial professionals before making investment decisions.
-        """)
+        # Trade analysis
+        if not backtest['trades'].empty:
+            st.markdown("### TRADE ANALYSIS")
+            
+            trades_df = backtest['trades']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**BEST TRADE:**")
+                if backtest['best_trade'] is not None:
+                    best = backtest['best_trade']
+                    st.success(f"""
+                    Date: {best['entry_date'].strftime('%Y-%m-%d')}  
+                    Type: {best['position_type']}  
+                    Entry Z-Score: {best['entry_zscore']:.2f}  
+                    Exit Z-Score: {best['exit_zscore']:.2f}  
+                    P&L: ${best['pnl']:.2f} ({best['pnl_pct']:.2f}%)
+                    """)
+            
+            with col2:
+                st.markdown("**WORST TRADE:**")
+                if backtest['worst_trade'] is not None:
+                    worst = backtest['worst_trade']
+                    st.error(f"""
+                    Date: {worst['entry_date'].strftime('%Y-%m-%d')}  
+                    Type: {worst['position_type']}  
+                    Entry Z-Score: {worst['entry_zscore']:.2f}  
+                    Exit Z-Score: {worst['exit_zscore']:.2f}  
+                    P&L: ${worst['pnl']:.2f} ({worst['pnl_pct']:.2f}%)
+                    """)
+            
+            # Trade distribution
+            fig_trades = go.Figure()
+            
+            fig_trades.add_trace(go.Histogram(
+                x=trades_df['pnl_pct'],
+                nbinsx=20,
+                name='Trade Returns',
+                marker_color='#00ff41',
+                opacity=0.7
+            ))
+            
+            fig_trades.update_layout(
+                title="TRADE RETURN DISTRIBUTION",
+                xaxis_title="RETURN (%)",
+                yaxis_title="FREQUENCY",
+                plot_bgcolor='#000000',
+                paper_bgcolor='#000000',
+                font_color='#00ff41',
+                height=300
+            )
+            
+            st.plotly_chart(fig_trades, use_container_width=True)
+            
+            # Detailed trades table
+            st.markdown("### TRADE HISTORY")
+            
+            display_trades = trades_df[['entry_date', 'exit_date', 'position_type', 'entry_zscore', 'exit_zscore', 'pnl', 'pnl_pct', 'exit_reason']].copy()
+            display_trades['entry_date'] = display_trades['entry_date'].dt.strftime('%Y-%m-%d')
+            display_trades['exit_date'] = display_trades['exit_date'].dt.strftime('%Y-%m-%d')
+            display_trades = display_trades.round(2)
+            
+            st.dataframe(
+                display_trades,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "entry_date": "ENTRY DATE",
+                    "exit_date": "EXIT DATE", 
+                    "position_type": "TYPE",
+                    "entry_zscore": "ENTRY Z",
+                    "exit_zscore": "EXIT Z",
+                    "pnl": "P&L ($)",
+                    "pnl_pct": "RETURN (%)",
+                    "exit_reason": "EXIT REASON"
+                }
+            )
     
     else:
-        st.warning("⚠️ No strategy data available for comparison.")
-        st.info("Run the profit analysis first to compare different strategies.")
+        st.warning("Run analysis first to see performance metrics")
 
-# Enhanced Sidebar with live monitoring
-with st.sidebar:
-    st.header("🎯 TRADING CONTROL CENTER")
+# Tab 4: Correlation Analysis  
+with tab4:
+    st.subheader("CORRELATION & STATISTICS")
     
-    if hasattr(trading_system, 'optimal_params') and trading_system.optimal_params:
-        # Quick strategy status
-        st.success(f"""
-        **ACTIVE STRATEGY ✅**  
-        Pair: {crypto1}/{crypto2}  
-        Expected Return: {trading_system.best_performance['total_return']:.1f}%  
-        Win Rate: {trading_system.best_performance['win_rate']:.1f}%  
-        Status: Optimized & Ready
-        """)
+    if 'current_data' in trader.__dict__ and trader.current_data:
+        price1 = trader.current_data['price1']
+        price2 = trader.current_data['price2']
+        crypto1 = trader.current_data['crypto1']
+        crypto2 = trader.current_data['crypto2']
         
-        # Current signal status (if data available)
-        try:
-            if 'current_zscore' in locals():
-                if abs(current_zscore) >= trading_system.optimal_params['entry_zscore']:
-                    signal_text = "🚀 SHORT SIGNAL" if current_zscore > 0 else "🚀 LONG SIGNAL"
-                    st.error(f"**{signal_text}**")
-                    st.error(f"Z-Score: {current_zscore:.2f}")
-                else:
-                    st.info("⏳ **WAITING FOR SIGNAL**")
-                    st.info(f"Z-Score: {current_zscore:.2f}")
-        except:
-            pass
+        # Calculate correlation statistics
+        corr_stats = trader.calculate_correlation_statistics(price1, price2)
         
-        # Quick stats
-        st.markdown("---")
-        st.markdown("**📊 QUICK STATS**")
-        st.metric("Leverage", f"{trading_system.optimal_params['leverage']}x")
-        st.metric("Entry Threshold", f"±{trading_system.optimal_params['entry_zscore']:.1f}")
-        st.metric("Take Profit", f"{trading_system.optimal_params['take_profit_pct']}%")
-        st.metric("Stop Loss", f"{trading_system.optimal_params['stop_loss_pct']}%")
+        if corr_stats:
+            # Correlation metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("CORRELATION", f"{corr_stats['correlation']:.3f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("30D AVG CORR", f"{corr_stats['correlation_30d_mean']:.3f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("CORR STABILITY", f"{corr_stats['correlation_stability']:.3f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("COINTEGRATION", f"{corr_stats['cointegration_score']:.3f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Pair suitability
+            if corr_stats['suitable_for_pairs']:
+                st.markdown('<div class="profit-alert">PAIR SUITABLE FOR TRADING</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="loss-alert">PAIR NOT SUITABLE - LOW CORRELATION</div>', unsafe_allow_html=True)
+            
+            # Rolling correlation chart
+            ret1 = price1.pct_change().dropna()
+            ret2 = price2.pct_change().dropna()
+            rolling_corr = ret1.rolling(30).corr(ret2).dropna()
+            
+            fig_corr = go.Figure()
+            
+            fig_corr.add_trace(go.Scatter(
+                x=rolling_corr.index,
+                y=rolling_corr.values,
+                name='30-Day Rolling Correlation',
+                line=dict(color='#00ff41', width=2)
+            ))
+            
+            fig_corr.add_hline(y=0.7, line_dash="dash", line_color="#ffff00", annotation_text="Suitable Threshold")
+            fig_corr.add_hline(y=0, line_color="#666666")
+            
+            fig_corr.update_layout(
+                title=f"ROLLING CORRELATION: {crypto1} vs {crypto2}",
+                xaxis_title="DATE",
+                yaxis_title="CORRELATION",
+                plot_bgcolor='#000000',
+                paper_bgcolor='#000000',
+                font_color='#00ff41',
+                height=400
+            )
+            
+            st.plotly_chart(fig_corr, use_container_width=True)
+            
+            # Spread analysis
+            df = trader.current_data['df']
+            
+            fig_spread = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=['Price Spread', 'Z-Score Distribution'],
+                vertical_spacing=0.15
+            )
+            
+            # Spread over time
+            fig_spread.add_trace(go.Scatter(
+                x=df.index, y=df['spread'],
+                name='Spread', line=dict(color='#00ffff')
+            ), row=1, col=1)
+            
+            fig_spread.add_trace(go.Scatter(
+                x=df.index, y=df['rolling_mean'],
+                name='Rolling Mean', line=dict(color='#ffff00', dash='dash')
+            ), row=1, col=1)
+            
+            # Z-score histogram
+            fig_spread.add_trace(go.Histogram(
+                x=df['zscore'].dropna(),
+                name='Z-Score Distribution',
+                marker_color='#00ff41',
+                opacity=0.7
+            ), row=2, col=1)
+            
+            fig_spread.update_layout(
+                height=600,
+                plot_bgcolor='#000000',
+                paper_bgcolor='#000000',
+                font_color='#00ff41'
+            )
+            
+            st.plotly_chart(fig_spread, use_container_width=True)
+            
+            # Statistical summary
+            st.markdown("### STATISTICAL SUMMARY")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"""
+                **PRICE STATISTICS:**  
+                {crypto1} Mean: ${price1.mean():.4f}  
+                {crypto1} Std: ${price1.std():.4f}  
+                {crypto2} Mean: ${price2.mean():.4f}  
+                {crypto2} Std: ${price2.std():.4f}  
+                """)
+            
+            with col2:
+                st.markdown(f"""
+                **SPREAD STATISTICS:**  
+                Spread Mean: {df['spread'].mean():.6f}  
+                Spread Std: {df['spread'].std():.6f}  
+                Z-Score Mean: {df['zscore'].mean():.3f}  
+                Z-Score Std: {df['zscore'].std():.3f}  
+                """)
         
-        # Risk warning
-        st.markdown("---")
-        st.warning(f"""
-        **⚠️ RISK REMINDER**  
-        Max Drawdown: {trading_system.best_performance['max_drawdown']:.1f}%  
-        This is HIGH RISK trading.  
-        Only use capital you can afford to lose!
-        """)
+        # Optimization suggestions
+        st.markdown("### OPTIMIZATION RECOMMENDATIONS")
         
-        # Trading tips
-        st.markdown("---")
-        st.info(f"""
-        **💡 PRO TIPS**  
-        • Start with small positions  
-        • Never override stop losses  
-        • Keep emotions in check  
-        • Track all trades  
-        • Review performance weekly
-        """)
+        if corr_stats and corr_stats['correlation'] > 0.8:
+            st.success("HIGH CORRELATION - Consider shorter timeframes and higher leverage")
+        elif corr_stats and corr_stats['correlation'] > 0.6:
+            st.info("MODERATE CORRELATION - Use standard parameters with careful risk management")
+        else:
+            st.warning("LOW CORRELATION - Consider different pairs or longer analysis periods")
     
     else:
-        st.warning("⚠️ **NO ACTIVE STRATEGY**")
-        st.info("Run the analysis first to activate trading signals!")
-        
-        # Available pairs quick reference
-        st.markdown("---")
-        st.markdown("**📋 AVAILABLE PAIRS**")
-        crypto_list = list(tickers.keys())[:10]  # Show first 10
-        for crypto in crypto_list:
-            st.write(f"• {crypto}")
-        
-        if len(tickers) > 10:
-            st.write(f"... and {len(tickers) - 10} more")
+        st.warning("Run analysis first to see correlation statistics")
+
+# Enhanced Sidebar - Professional style
+with st.sidebar:
+    st.markdown('<div style="background: #000000; padding: 15px; border: 1px solid #00ff41; color: #00ff41; font-family: Courier New;">', unsafe_allow_html=True)
+    st.markdown("### TRADING SYSTEM STATUS")
     
-    # Footer
+    if 'current_data' in trader.__dict__ and trader.current_data:
+        st.success(f"""
+        ACTIVE PAIR: {trader.current_data['crypto1']}/{trader.current_data['crypto2']}  
+        HEDGE RATIO: {trader.current_data['hedge_ratio']:.3f}  
+        STATUS: READY
+        """)
+        
+        # Latest signal
+        latest_signal = trader.current_data['signals'].iloc[-1]
+        current_zscore = latest_signal['zscore']
+        
+        if abs(current_zscore) >= 2.0:
+            st.error(f"SIGNAL: {latest_signal['action']}")
+            st.error(f"Z-SCORE: {current_zscore:.2f}")
+        else:
+            st.info(f"MONITORING")
+            st.info(f"Z-SCORE: {current_zscore:.2f}")
+    
+    else:
+        st.warning("NO ACTIVE STRATEGY")
+        st.info("Run analysis to activate")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Quick stats
     st.markdown("---")
-    st.markdown("**💰 Profit Maximizer v2.0**")
-    st.markdown("*AI-Powered Pairs Trading*")
+    st.markdown("### MARKET DATA")
+    
+    # Show available pairs
+    st.markdown("**AVAILABLE PAIRS:**")
+    for crypto in list(CRYPTO_TICKERS.keys())[:15]:  # Show first 15
+        st.text(crypto)
+    
+    st.markdown("---")
+    st.markdown("**RISK DISCLAIMER:**")
+    st.error("""
+    Trading involves substantial risk.  
+    Past performance does not guarantee future results.  
+    Only trade with capital you can afford to lose.
+    """)
+    
+    st.markdown("---")
+    st.markdown("*Professional Pairs Trading System v1.0*")
+    st.markdown("*Quantitative • Risk-Managed • Profitable*")
