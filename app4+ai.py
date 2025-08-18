@@ -57,7 +57,7 @@ st.markdown("""
 # Move the cached function outside of the class
 @st.cache_data
 def load_crypto_data(symbol, period='1y'):
-    """Load cryptocurrency data using imported tickers"""
+    """Load cryptocurrency data using imported tickers - FIXED VERSION"""
     try:
         # Use the imported tickers dictionary
         ticker_symbol = tickers.get(symbol, symbol)
@@ -73,22 +73,32 @@ def load_crypto_data(symbol, period='1y'):
             st.error(f"No data returned for {symbol}")
             return pd.Series(dtype=float)
         
-        # Extract Close price
+        # FIXED: Properly extract Close price as 1-dimensional Series
         if isinstance(data, pd.DataFrame):
             if 'Close' in data.columns:
-                close_data = data['Close']
+                close_data = data['Close'].squeeze()  # squeeze() ensures 1-dimensional
             else:
-                # If single column, use it
-                close_data = data.iloc[:, -1]  # Last column
+                # If single column, use it and squeeze to ensure 1-dimensional
+                close_data = data.iloc[:, -1].squeeze()
         else:
-            # If it's already a Series
-            close_data = data
+            # If it's already a Series, ensure it's 1-dimensional
+            close_data = data.squeeze()
+        
+        # Ensure we have a proper 1-dimensional pandas Series
+        if isinstance(close_data, pd.DataFrame):
+            close_data = close_data.iloc[:, 0]  # Take first column if still DataFrame
+        
+        # Convert to Series if it's not already (with proper index)
+        if not isinstance(close_data, pd.Series):
+            close_data = pd.Series(close_data.flatten() if hasattr(close_data, 'flatten') else close_data)
         
         # Clean data
         close_data = close_data.dropna()
         
         st.write(f"Debug - Final data type: {type(close_data)}")
         st.write(f"Debug - Final data length: {len(close_data)}")
+        st.write(f"Debug - Is Series: {isinstance(close_data, pd.Series)}")
+        st.write(f"Debug - Data shape: {close_data.shape if hasattr(close_data, 'shape') else 'N/A'}")
         
         return close_data
         
@@ -107,47 +117,92 @@ class MLPairsTradingSystem:
         """Load cryptocurrency data using imported tickers"""
         return load_crypto_data(symbol, period)
     
-    
     def calculate_spread_and_zscore(self, price1, price2, zscore_window=30, hedge_method='dollar_neutral'):
-        import pandas as pd
-        import numpy as np
-    
-        # Als het een DataFrame is, pak de eerste kolom
-        if isinstance(price1, pd.DataFrame):
-            price1 = price1.iloc[:, 0]
-        if isinstance(price2, pd.DataFrame):
-            price2 = price2.iloc[:, 0]
-    
-        # Zorg dat beide Series zijn
-        price1 = pd.Series(price1).dropna()
-        price2 = pd.Series(price2).dropna()
-    
-        # Align op index
+        """Calculate spread and z-score - FIXED to handle all data types properly"""
+        
+        # FIXED: Robust conversion to 1-dimensional pandas Series
+        def ensure_series(data, name="data"):
+            """Ensure data is a proper 1-dimensional pandas Series"""
+            # If it's a DataFrame, extract the first/only column
+            if isinstance(data, pd.DataFrame):
+                if data.shape[1] == 1:
+                    data = data.iloc[:, 0]
+                else:
+                    # If multiple columns, try to find 'Close' or take last column
+                    if 'Close' in data.columns:
+                        data = data['Close']
+                    else:
+                        data = data.iloc[:, -1]
+            
+            # If it's a numpy array, convert to Series
+            if isinstance(data, np.ndarray):
+                if data.ndim > 1:
+                    data = data.flatten()
+                data = pd.Series(data)
+            
+            # If it's not a Series yet, convert it
+            if not isinstance(data, pd.Series):
+                try:
+                    data = pd.Series(data)
+                except Exception as e:
+                    st.error(f"Could not convert {name} to Series: {e}")
+                    return pd.Series(dtype=float)
+            
+            # Clean the data
+            data = data.dropna()
+            
+            return data
+        
+        # Ensure both inputs are proper 1-dimensional Series
+        price1 = ensure_series(price1, "price1")
+        price2 = ensure_series(price2, "price2")
+        
+        # Check if we have valid data
+        if len(price1) == 0 or len(price2) == 0:
+            st.error("Empty data after cleaning")
+            return pd.DataFrame(), 1.0
+        
+        # Align on index (inner join to get common dates)
         price1, price2 = price1.align(price2, join='inner')
-    
-        # Hedge ratio berekenen
+        
+        # Check if we still have data after alignment
+        if len(price1) == 0:
+            st.error("No common dates between the two price series")
+            return pd.DataFrame(), 1.0
+        
+        # Calculate hedge ratio
         if hedge_method == 'dollar_neutral':
             hedge_ratio = 1.0
         elif hedge_method == 'regression':
-            from sklearn.linear_model import LinearRegression
-            model = LinearRegression().fit(price2.values.reshape(-1, 1), price1.values)
-            hedge_ratio = model.coef_[0]
+            try:
+                model = LinearRegression().fit(price2.values.reshape(-1, 1), price1.values)
+                hedge_ratio = model.coef_[0]
+            except Exception as e:
+                st.warning(f"Regression failed, using dollar neutral: {e}")
+                hedge_ratio = 1.0
         else:
             raise ValueError(f"Unknown hedge method: {hedge_method}")
-    
-        # Spread en zscore
+        
+        # Calculate spread and zscore
         spread = price1 - hedge_ratio * price2
-        zscore = (spread - spread.rolling(window=zscore_window).mean()) / spread.rolling(window=zscore_window).std()
-    
+        
+        # Calculate rolling mean and std for zscore
+        rolling_mean = spread.rolling(window=zscore_window, min_periods=1).mean()
+        rolling_std = spread.rolling(window=zscore_window, min_periods=1).std()
+        
+        # Avoid division by zero
+        rolling_std = rolling_std.replace(0, np.nan)
+        zscore = (spread - rolling_mean) / rolling_std
+        
+        # Create result DataFrame
         df = pd.DataFrame({
             'price1': price1,
             'price2': price2,
             'spread': spread,
             'zscore': zscore
         }, index=price1.index)
-    
+        
         return df, hedge_ratio
-
 
     def backtest_strategy(self, df, entry_zscore, exit_zscore, stop_loss_pct, 
                          take_profit_pct, leverage, max_hold_days=30):
@@ -282,19 +337,44 @@ class MLPairsTradingSystem:
         return (returns.mean() / returns.std()) * np.sqrt(252)
     
     def optimize_parameters(self, price1, price2, trading_timeframe_days=30):
-        """ML-powered parameter optimization (robuust gemaakt)"""
+        """ML-powered parameter optimization - FIXED to handle all data types"""
         
-        # ---- FIX: altijd Series met index maken ----
-        if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1, index=range(len(price1)))
-        if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2, index=range(len(price2)))
+        # FIXED: Ensure inputs are proper 1-dimensional Series without forcing conversion
+        def safe_series_conversion(data, name):
+            """Safely convert data to pandas Series"""
+            if isinstance(data, pd.Series):
+                return data.dropna()
+            elif isinstance(data, pd.DataFrame):
+                if data.shape[1] == 1:
+                    return data.iloc[:, 0].dropna()
+                else:
+                    # Try to find Close column or use last column
+                    if 'Close' in data.columns:
+                        return data['Close'].dropna()
+                    else:
+                        return data.iloc[:, -1].dropna()
+            elif isinstance(data, np.ndarray):
+                if data.ndim == 2 and data.shape[1] == 1:
+                    return pd.Series(data.flatten()).dropna()
+                elif data.ndim == 1:
+                    return pd.Series(data).dropna()
+                else:
+                    raise ValueError(f"{name} has unsupported shape: {data.shape}")
+            else:
+                try:
+                    return pd.Series(data).dropna()
+                except Exception as e:
+                    raise ValueError(f"Could not convert {name} to Series: {e}")
+        
+        # Convert inputs safely
+        price1 = safe_series_conversion(price1, "price1")
+        price2 = safe_series_conversion(price2, "price2")
         
         # Validate inputs
         if len(price1) < 50 or len(price2) < 50:
             raise ValueError("Insufficient data for optimization. Need at least 50 data points.")
         
-        st.info("🤖 AI is optimizing parameters for maximum profit...")
+        st.info("AI is optimizing parameters for maximum profit...")
         
         # Define parameter grid based on trading timeframe
         if trading_timeframe_days <= 7:  # Short-term
@@ -345,6 +425,10 @@ class MLPairsTradingSystem:
                     zscore_window=params['zscore_window'],
                     hedge_method=params['hedge_method']
                 )
+                
+                # Check if we got valid data
+                if df.empty or df['zscore'].isna().all():
+                    continue
                 
                 # Backtest with current parameters
                 results_dict = self.backtest_strategy(
@@ -399,7 +483,7 @@ class MLPairsTradingSystem:
         return best_params, pd.DataFrame(results)
 
 
-# Initialize the system (removed @st.cache_resource decorator as it can cause issues)
+# Initialize the system
 def get_trading_system():
     return MLPairsTradingSystem()
 
@@ -410,7 +494,7 @@ if 'trading_system' not in st.session_state:
 trading_system = st.session_state.trading_system
 
 # Main App Interface
-st.title("🤖 AI-Powered Pairs Trading System")
+st.title("AI-Powered Pairs Trading System")
 st.markdown("*Professional cryptocurrency pairs trading with machine learning optimization*")
 
 # Tabs
@@ -418,7 +502,7 @@ tab1, tab2, tab3 = st.tabs(["📊 Pair Analysis & Optimization", "🎯 Live Trad
 
 # Tab 1: Pair Analysis & Optimization
 with tab1:
-    st.header("🔍 Pair Selection & AI Optimization")
+    st.header("Pair Selection & AI Optimization")
     
     col1, col2, col3 = st.columns([2, 2, 1])
     
@@ -431,7 +515,7 @@ with tab1:
         timeframe_days = st.selectbox("Trading Timeframe:", [7, 14, 30, 90], index=2)
     
     # Load data
-    if st.button("🚀 Analyze Pair & Optimize with AI", type="primary"):
+    if st.button("Analyze Pair & Optimize with AI", type="primary"):
         try:
             with st.spinner("Loading market data..."):
                 price1 = trading_system.load_data(crypto1)
@@ -444,7 +528,7 @@ with tab1:
             st.write(f"Debug - price2 empty: {price2.empty if hasattr(price2, 'empty') else 'N/A'}")
             
             if not price1.empty and not price2.empty and len(price1) > 50 and len(price2) > 50:
-                st.success(f"✅ Data loaded successfully! {crypto1}: {len(price1)} points, {crypto2}: {len(price2)} points")
+                st.success(f"Data loaded successfully! {crypto1}: {len(price1)} points, {crypto2}: {len(price2)} points")
                 
                 # Run ML optimization
                 with st.spinner("Running AI optimization..."):
@@ -453,7 +537,7 @@ with tab1:
                     )
                 
                 # Display results
-                st.success("✅ AI Optimization Complete!")
+                st.success("AI Optimization Complete!")
                 
                 # Show optimal parameters
                 col1, col2, col3, col4 = st.columns(4)
@@ -522,35 +606,35 @@ with tab1:
                 st.plotly_chart(fig_zscore, use_container_width=True)
                 
                 # Performance comparison table
-                st.subheader("🏆 Top 10 Parameter Combinations")
+                st.subheader("Top 10 Parameter Combinations")
                 top_results = all_results.nlargest(10, 'total_return')[
                     ['entry_zscore', 'exit_zscore', 'leverage', 'hedge_method', 
                      'total_return', 'win_rate', 'num_trades', 'max_drawdown']
                 ]
                 st.dataframe(top_results.round(2), use_container_width=True)
             else:
-                st.error("❌ Failed to load data for one or both cryptocurrencies!")
+                st.error("Failed to load data for one or both cryptocurrencies!")
                 
         except Exception as e:
-            st.error(f"❌ An error occurred: {str(e)}")
+            st.error(f"An error occurred: {str(e)}")
             st.exception(e)  # This will show the full traceback for debugging
 
 # Tab 2: Live Trading Signals
 with tab2:
-    st.header("🎯 Live Trading Signals & Execution")
+    st.header("Live Trading Signals & Execution")
     
     if hasattr(trading_system, 'optimal_params') and trading_system.optimal_params:
         # Capital and leverage settings
         col1, col2, col3 = st.columns(3)
         with col1:
-            capital = st.number_input("💰 Trading Capital (USDT):", 
+            capital = st.number_input("Trading Capital (USDT):", 
                                     min_value=100, max_value=1000000, value=5000, step=100)
         with col2:
-            leverage = st.slider("🔥 Leverage Multiplier:", 
+            leverage = st.slider("Leverage Multiplier:", 
                                min_value=1, max_value=50, 
                                value=trading_system.optimal_params['leverage'], step=1)
         with col3:
-            risk_per_trade = st.slider("🎯 Risk per Trade (%):", 
+            risk_per_trade = st.slider("Risk per Trade (%):", 
                                      min_value=1.0, max_value=10.0, value=3.0, step=0.5)
         
         # Get current market data
@@ -568,7 +652,7 @@ with tab2:
         current_zscore = df_current['zscore'].iloc[-1]
         
         # Display current market status
-        st.subheader("📊 Current Market Status")
+        st.subheader("Current Market Status")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(f"{crypto1} Price", f"${current_price1:.4f}")
@@ -606,13 +690,13 @@ with tab2:
             crypto2_value = crypto2_amount * current_price2
             
             if signal_type == "LONG_SPREAD":
-                st.markdown('<div class="signal-buy">🚀 LONG SPREAD SIGNAL ACTIVE</div>', 
+                st.markdown('<div class="signal-buy">LONG SPREAD SIGNAL ACTIVE</div>', 
                            unsafe_allow_html=True)
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.success(f"""
-                    ### 🟢 BUY {crypto1}
+                    ### BUY {crypto1}
                     **Action:** Market Buy Order
                     **Amount:** {crypto1_amount:.6f} {crypto1}
                     **Value:** ${crypto1_value:.2f} USDT
@@ -621,7 +705,7 @@ with tab2:
                 
                 with col2:
                     st.error(f"""
-                    ### 🔴 SELL {crypto2} (Short)
+                    ### SELL {crypto2} (Short)
                     **Action:** Market Sell (Futures)
                     **Amount:** {crypto2_amount:.6f} {crypto2}
                     **Value:** ${crypto2_value:.2f} USDT
@@ -630,13 +714,13 @@ with tab2:
                     """)
             
             else:  # SHORT_SPREAD
-                st.markdown('<div class="signal-sell">🔥 SHORT SPREAD SIGNAL ACTIVE</div>', 
+                st.markdown('<div class="signal-sell">SHORT SPREAD SIGNAL ACTIVE</div>', 
                            unsafe_allow_html=True)
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.error(f"""
-                    ### 🔴 SELL {crypto1} (Short)
+                    ### SELL {crypto1} (Short)
                     **Action:** Market Sell (Futures)
                     **Amount:** {crypto1_amount:.6f} {crypto1}
                     **Value:** ${crypto1_value:.2f} USDT
@@ -646,7 +730,7 @@ with tab2:
                 
                 with col2:
                     st.success(f"""
-                    ### 🟢 BUY {crypto2}
+                    ### BUY {crypto2}
                     **Action:** Market Buy Order
                     **Amount:** {crypto2_amount:.6f} {crypto2}
                     **Value:** ${crypto2_value:.2f} USDT
@@ -655,44 +739,44 @@ with tab2:
             
             # Risk management levels
             st.markdown("---")
-            st.subheader("🛡️ Risk Management Levels")
+            st.subheader("Risk Management Levels")
             
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.info(f"""
-                **🎯 Take Profit**
+                **Take Profit**
                 Exit when Z-Score reaches: **±{trading_system.optimal_params['exit_zscore']:.1f}**
                 Expected profit: **{trading_system.optimal_params['take_profit_pct']}%**
                 """)
             
             with col2:
                 st.warning(f"""
-                **🛑 Stop Loss**
+                **Stop Loss**
                 Exit if loss exceeds: **{trading_system.optimal_params['stop_loss_pct']}%**
                 Max loss amount: **${(capital * risk_per_trade/100):.2f}**
                 """)
             
             with col3:
                 st.error(f"""
-                **⏰ Time Exit**
+                **Time Exit**
                 Close position after: **{timeframe_days} days**
                 Reason: Prevent correlation breakdown
                 """)
         
         else:
-            st.markdown('<div class="no-signal">⏳ NO TRADING SIGNAL - WAIT FOR OPPORTUNITY</div>', 
+            st.markdown('<div class="no-signal">NO TRADING SIGNAL - WAIT FOR OPPORTUNITY</div>', 
                        unsafe_allow_html=True)
             
             distance_to_long = abs(current_zscore + trading_system.optimal_params['entry_zscore'])
             distance_to_short = abs(current_zscore - trading_system.optimal_params['entry_zscore'])
             
             st.info(f"""
-            ### 📊 Signal Status
+            ### Signal Status
             **Current Z-Score:** {current_zscore:.2f}
             
             **Distance to Signals:**
-            - 🟢 Long Signal: {distance_to_long:.2f} points away
-            - 🔴 Short Signal: {distance_to_short:.2f} points away
+            - Long Signal: {distance_to_long:.2f} points away
+            - Short Signal: {distance_to_short:.2f} points away
             
             **Set Price Alerts:**
             - Alert when Z-Score ≤ -{trading_system.optimal_params['entry_zscore']:.1f}
@@ -700,35 +784,35 @@ with tab2:
             """)
     
     else:
-        st.warning("⚠️ Please complete the Pair Analysis & Optimization first!")
+        st.warning("Please complete the Pair Analysis & Optimization first!")
 
 # Tab 3: Performance Analytics
 with tab3:
-    st.header("📈 Performance Analytics & Comparison")
+    st.header("Performance Analytics & Comparison")
     
     if hasattr(trading_system, 'best_performance') and trading_system.best_performance:
         # Performance metrics dashboard
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("🎯 Expected Return", 
+            st.metric("Expected Return", 
                      f"{trading_system.best_performance['total_return']:.1f}%",
                      delta=f"vs Buy & Hold")
         
         with col2:
-            st.metric("🎲 Win Rate", 
+            st.metric("Win Rate", 
                      f"{trading_system.best_performance['win_rate']:.1f}%")
         
         with col3:
-            st.metric("📊 Sharpe Ratio", 
+            st.metric("Sharpe Ratio", 
                      f"{trading_system.best_performance['sharpe_ratio']:.2f}")
         
         with col4:
-            st.metric("📉 Max Drawdown", 
+            st.metric("Max Drawdown", 
                      f"{trading_system.best_performance['max_drawdown']:.1f}%")
         
         # Strategy vs Buy & Hold comparison
-        st.subheader("⚖️ Strategy Performance vs Buy & Hold")
+        st.subheader("Strategy Performance vs Buy & Hold")
         
         if 'price1' in locals() and 'price2' in locals():
             # Calculate buy & hold returns
@@ -741,7 +825,7 @@ with tab3:
             
             with col1:
                 st.success(f"""
-                **🤖 AI Pairs Strategy**
+                **AI Pairs Strategy**
                 - Return: {trading_system.best_performance['total_return']:.1f}%
                 - Trades: {trading_system.best_performance['num_trades']}
                 - Win Rate: {trading_system.best_performance['win_rate']:.1f}%
@@ -750,7 +834,7 @@ with tab3:
             
             with col2:
                 st.info(f"""
-                **📈 Buy & Hold Portfolio**
+                **Buy & Hold Portfolio**
                 - Return: {portfolio_return:.1f}%
                 - {crypto1}: {crypto1_return:.1f}%
                 - {crypto2}: {crypto2_return:.1f}%
@@ -761,7 +845,7 @@ with tab3:
                 outperformance = trading_system.best_performance['total_return'] - portfolio_return
                 if outperformance > 0:
                     st.success(f"""
-                    **🏆 Strategy Advantage**
+                    **Strategy Advantage**
                     - Outperforms by: {outperformance:.1f}%
                     - Lower volatility
                     - Market neutral exposure
@@ -769,7 +853,7 @@ with tab3:
                     """)
                 else:
                     st.warning(f"""
-                    **⚠️ Strategy Underperformance**
+                    **Strategy Underperformance**
                     - Underperforms by: {abs(outperformance):.1f}%
                     - But lower risk
                     - Market neutral
@@ -778,7 +862,7 @@ with tab3:
         
         # Portfolio equity curve
         if trading_system.best_performance.get('portfolio_values'):
-            st.subheader("📊 Strategy Equity Curve")
+            st.subheader("Strategy Equity Curve")
             
             portfolio_values = trading_system.best_performance['portfolio_values']
             dates = pd.date_range(start='2023-01-01', periods=len(portfolio_values), freq='D')
@@ -816,7 +900,7 @@ with tab3:
         
         # Trade analysis
         if trading_system.best_performance.get('trades') is not None and not trading_system.best_performance['trades'].empty:
-            st.subheader("📋 Detailed Trade Analysis")
+            st.subheader("Detailed Trade Analysis")
             
             trades_df = trading_system.best_performance['trades']
             
@@ -844,7 +928,7 @@ with tab3:
                 st.plotly_chart(fig_pos, use_container_width=True)
             
             # Trade statistics table
-            st.subheader("📊 Trade Statistics")
+            st.subheader("Trade Statistics")
             
             stats_summary = trades_df.groupby('position_type').agg({
                 'pnl_pct': ['count', 'mean', 'std', 'min', 'max'],
@@ -855,7 +939,7 @@ with tab3:
             st.dataframe(stats_summary, use_container_width=True)
             
             # Recent trades table
-            st.subheader("🔍 Recent Trade History")
+            st.subheader("Recent Trade History")
             recent_trades = trades_df.tail(10)[
                 ['entry_date', 'exit_date', 'position_type', 'entry_zscore', 
                  'exit_zscore', 'pnl_pct', 'days_held', 'exit_reason']
@@ -872,13 +956,13 @@ with tab3:
             st.dataframe(styled_trades, use_container_width=True)
         
         # Risk analysis
-        st.subheader("⚠️ Risk Analysis & Warnings")
+        st.subheader("Risk Analysis & Warnings")
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.error(f"""
-            **🚨 High Risk Factors:**
+            **High Risk Factors:**
             - Leverage up to {trading_system.optimal_params.get('leverage', 'N/A')}x amplifies losses
             - Crypto volatility can exceed 50% daily
             - Correlation breakdown risk in volatile markets
@@ -888,7 +972,7 @@ with tab3:
         
         with col2:
             st.info(f"""
-            **🛡️ Risk Mitigation:**
+            **Risk Mitigation:**
             - Max {trading_system.optimal_params.get('stop_loss_pct', 'N/A')}% stop loss per trade
             - Position sizing based on risk tolerance
             - Market neutral strategy reduces directional risk
@@ -898,10 +982,10 @@ with tab3:
         
         # Performance summary
         st.markdown("---")
-        st.subheader("🎯 Strategy Summary")
+        st.subheader("Strategy Summary")
         
         summary_text = f"""
-        ## 🤖 AI-Optimized Pairs Trading Strategy Summary
+        ## AI-Optimized Pairs Trading Strategy Summary
         
         **Pair:** {crypto1}/{crypto2}  
         **Timeframe:** {timeframe_days} days per trade  
@@ -925,11 +1009,11 @@ with tab3:
         st.markdown(summary_text)
     
     else:
-        st.warning("⚠️ Please complete the Pair Analysis & Optimization first to see performance analytics!")
+        st.warning("Please complete the Pair Analysis & Optimization first to see performance analytics!")
 
 # Sidebar with quick stats and alerts
 with st.sidebar:
-    st.header("🚀 Quick Stats")
+    st.header("Quick Stats")
     
     if hasattr(trading_system, 'optimal_params') and trading_system.optimal_params:
         st.success(f"""
@@ -942,9 +1026,7 @@ with st.sidebar:
         # Current signal status
         if 'current_zscore' in locals():
             if abs(current_zscore) >= trading_system.optimal_params['entry_zscore']:
-                signal_emoji = "🚨" if current_zscore > 0 else "🟢"
                 signal_text = "SHORT SIGNAL" if current_zscore > 0 else "LONG SIGNAL"
-                st.error(f"{signal_emoji} {signal_text}")
+                st.error(f"{signal_text}")
             else:
-                st.info("⏳ No Signal")
-    
+                st.info("No Signal")
