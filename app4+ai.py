@@ -86,12 +86,21 @@ def load_crypto_data(symbol, period='1y'):
         if data.empty:
             return pd.Series(dtype=float)
         
-        # Return close prices as Series
+        # Return close prices as Series - FIXED: Ensure proper Series creation
         if isinstance(data, pd.DataFrame) and 'Close' in data.columns:
-            return data['Close'].dropna()
+            close_prices = data['Close'].dropna()
+            # Ensure it's a proper 1D Series
+            if hasattr(close_prices, 'values'):
+                return pd.Series(close_prices.values.flatten(), index=close_prices.index)
+            return close_prices
         elif isinstance(data, pd.DataFrame):
-            return data.iloc[:, -1].dropna()
+            last_col = data.iloc[:, -1].dropna()
+            if hasattr(last_col, 'values'):
+                return pd.Series(last_col.values.flatten(), index=last_col.index)
+            return last_col
         else:
+            if hasattr(data, 'values'):
+                return pd.Series(data.values.flatten(), index=data.index if hasattr(data, 'index') else None)
             return data.dropna()
             
     except Exception as e:
@@ -108,24 +117,26 @@ class ProfessionalPairsTrader:
         
     def calculate_correlation_statistics(self, price1, price2):
         """Calculate comprehensive correlation statistics"""
-        # Ensure we have Series objects
-        if isinstance(price1, pd.DataFrame):
-            if 'Close' in price1.columns:
-                price1 = price1['Close']
-            else:
-                price1 = price1.iloc[:, -1]
+        # FIXED: Ensure proper Series conversion
+        def ensure_series(data):
+            if isinstance(data, pd.DataFrame):
+                if 'Close' in data.columns:
+                    data = data['Close']
+                else:
+                    data = data.iloc[:, -1]
+            
+            if not isinstance(data, pd.Series):
+                if hasattr(data, 'values'):
+                    values = data.values
+                    if values.ndim > 1:
+                        values = values.flatten()
+                    return pd.Series(values, index=data.index if hasattr(data, 'index') else None)
+                else:
+                    return pd.Series(data)
+            return data
         
-        if isinstance(price2, pd.DataFrame):
-            if 'Close' in price2.columns:
-                price2 = price2['Close']
-            else:
-                price2 = price2.iloc[:, -1]
-        
-        # Convert to Series and ensure they're 1D
-        if not isinstance(price1, pd.Series):
-            price1 = pd.Series(price1.values.flatten(), index=price1.index if hasattr(price1, 'index') else None)
-        if not isinstance(price2, pd.Series):
-            price2 = pd.Series(price2.values.flatten(), index=price2.index if hasattr(price2, 'index') else None)
+        price1 = ensure_series(price1)
+        price2 = ensure_series(price2)
         
         # Align data
         price1, price2 = price1.align(price2, join='inner')
@@ -185,43 +196,37 @@ class ProfessionalPairsTrader:
             return 0.5
     
     def calculate_spread_and_signals(self, price1, price2, lookback_window=60, zscore_window=20):
-        """Calculate spread, z-score and generate trading signals"""
+        """Calculate spread, z-score and generate trading signals - FIXED"""
         
-        # Ensure we have Series objects
-        if isinstance(price1, pd.DataFrame):
-            if 'Close' in price1.columns:
-                price1 = price1['Close']
-            else:
-                price1 = price1.iloc[:, -1]
+        # FIXED: Robust Series conversion function
+        def ensure_clean_series(data):
+            if isinstance(data, pd.DataFrame):
+                if 'Close' in data.columns:
+                    data = data['Close']
+                else:
+                    data = data.iloc[:, -1]
+            
+            if not isinstance(data, pd.Series):
+                if hasattr(data, 'values'):
+                    values = data.values
+                    if values.ndim > 1:
+                        values = values.flatten()
+                    index = data.index if hasattr(data, 'index') else None
+                    return pd.Series(values, index=index)
+                else:
+                    return pd.Series(data)
+            
+            # Ensure it's truly 1D
+            if hasattr(data, 'values') and data.values.ndim > 1:
+                return pd.Series(data.values.flatten(), index=data.index)
+            
+            return data
         
-        if isinstance(price2, pd.DataFrame):
-            if 'Close' in price2.columns:
-                price2 = price2['Close']
-            else:
-                price2 = price2.iloc[:, -1]
+        # Convert to clean Series
+        price1 = ensure_clean_series(price1).dropna()
+        price2 = ensure_clean_series(price2).dropna()
         
-        # Ensure Series are properly formatted and 1D
-        if not isinstance(price1, pd.Series):
-            if hasattr(price1, 'values'):
-                values = price1.values
-                if values.ndim > 1:
-                    values = values.flatten()
-                price1 = pd.Series(values, index=price1.index if hasattr(price1, 'index') else None)
-            else:
-                price1 = pd.Series(price1)
-        
-        if not isinstance(price2, pd.Series):
-            if hasattr(price2, 'values'):
-                values = price2.values
-                if values.ndim > 1:
-                    values = values.flatten()
-                price2 = pd.Series(values, index=price2.index if hasattr(price2, 'index') else None)
-            else:
-                price2 = pd.Series(price2)
-        
-        # Clean and align data
-        price1 = price1.dropna()
-        price2 = price2.dropna()
+        # Align data
         price1, price2 = price1.align(price2, join='inner')
         
         if len(price1) < lookback_window + zscore_window:
@@ -238,7 +243,8 @@ class ProfessionalPairsTrader:
             if abs(hedge_ratio) > 5 or abs(hedge_ratio) < 0.2:
                 hedge_ratio = 1.0
                 
-        except:
+        except Exception as e:
+            st.warning(f"Hedge ratio calculation failed: {e}")
             hedge_ratio = 1.0
         
         # Calculate spread
@@ -253,15 +259,19 @@ class ProfessionalPairsTrader:
         rolling_std = rolling_std.replace(0, rolling_std.mean())
         zscore = (spread - rolling_mean) / rolling_std
         
-        # Create comprehensive dataframe
-        df = pd.DataFrame({
-            'price1': price1,
-            'price2': price2,
-            'spread': spread,
-            'rolling_mean': rolling_mean,
-            'rolling_std': rolling_std,
-            'zscore': zscore.fillna(0)
-        }, index=price1.index)
+        # FIXED: Create DataFrame with explicit Series conversion
+        try:
+            df = pd.DataFrame({
+                'price1': pd.Series(price1.values.flatten(), index=price1.index),
+                'price2': pd.Series(price2.values.flatten(), index=price2.index),
+                'spread': pd.Series(spread.values.flatten(), index=spread.index),
+                'rolling_mean': pd.Series(rolling_mean.values.flatten(), index=rolling_mean.index),
+                'rolling_std': pd.Series(rolling_std.values.flatten(), index=rolling_std.index),
+                'zscore': pd.Series(zscore.fillna(0).values.flatten(), index=zscore.index)
+            }, index=price1.index)
+        except Exception as e:
+            st.error(f"DataFrame creation error: {e}")
+            return pd.DataFrame(), hedge_ratio
         
         return df, hedge_ratio
     
@@ -486,7 +496,7 @@ class ProfessionalPairsTrader:
         win_trades = trades_df[trades_df['pnl'] > 0]
         loss_trades = trades_df[trades_df['pnl'] <= 0]
         
-        win_rate = len(win_trades) / len(trades_df) * 100
+        win_rate = len(win_trades) / len(trades_df) * 100 if len(trades_df) > 0 else 0
         avg_win = win_trades['pnl'].mean() if len(win_trades) > 0 else 0
         avg_loss = loss_trades['pnl'].mean() if len(loss_trades) > 0 else 0
         
@@ -562,63 +572,66 @@ with tab1:
             
             # Calculate signals and backtest
             df, hedge_ratio = trader.calculate_spread_and_signals(price1, price2)
-            signals = trader.generate_trading_signals(df)
-            backtest_results = trader.backtest_strategy(signals)
             
-            # Store results
-            trader.current_data = {
-                'crypto1': crypto1, 'crypto2': crypto2,
-                'price1': price1, 'price2': price2,
-                'df': df, 'hedge_ratio': hedge_ratio,
-                'signals': signals, 'backtest': backtest_results
-            }
-            
-            # Display results
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("TOTAL RETURN", f"{backtest_results['total_return']:.1f}%")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("WIN RATE", f"{backtest_results['win_rate']:.1f}%")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("PROFIT FACTOR", f"{backtest_results['profit_factor']:.2f}")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with col4:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("MAX DRAWDOWN", f"{backtest_results['max_drawdown']:.1f}%")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Charts
-            fig = make_subplots(
-                rows=2, cols=1,
-                subplot_titles=[f'{crypto1} vs {crypto2} - Normalized Prices', 'Z-Score & Trading Signals'],
-                vertical_spacing=0.1
-            )
-            
-            # Price chart (normalized)
-            norm_price1 = price1 / price1.iloc[0] * 100
-            norm_price2 = price2 / price2.iloc[0] * 100
-            
-            fig.add_trace(go.Scatter(x=price1.index, y=norm_price1, name=crypto1, line=dict(color='#00ff41')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=price2.index, y=norm_price2, name=crypto2, line=dict(color='#ff4444')), row=1, col=1)
-            
-            # Z-score chart
-            fig.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-Score', line=dict(color='#00ffff')), row=2, col=1)
-            fig.add_hline(y=2.0, line_dash="dash", line_color="#ff4444", row=2, col=1)
-            fig.add_hline(y=-2.0, line_dash="dash", line_color="#00ff41", row=2, col=1)
-            fig.add_hline(y=0, line_color="#666666", row=2, col=1)
-            
-            fig.update_layout(height=600, plot_bgcolor='#000000', paper_bgcolor='#000000', font_color='#00ff41')
-            st.plotly_chart(fig, use_container_width=True)
-            
+            if not df.empty:
+                signals = trader.generate_trading_signals(df)
+                backtest_results = trader.backtest_strategy(signals)
+                
+                # Store results
+                trader.current_data = {
+                    'crypto1': crypto1, 'crypto2': crypto2,
+                    'price1': price1, 'price2': price2,
+                    'df': df, 'hedge_ratio': hedge_ratio,
+                    'signals': signals, 'backtest': backtest_results
+                }
+                
+                # Display results
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                    st.metric("TOTAL RETURN", f"{backtest_results['total_return']:.1f}%")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                    st.metric("WIN RATE", f"{backtest_results['win_rate']:.1f}%")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                    st.metric("PROFIT FACTOR", f"{backtest_results['profit_factor']:.2f}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col4:
+                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                    st.metric("MAX DRAWDOWN", f"{backtest_results['max_drawdown']:.1f}%")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Charts
+                fig = make_subplots(
+                    rows=2, cols=1,
+                    subplot_titles=[f'{crypto1} vs {crypto2} - Normalized Prices', 'Z-Score & Trading Signals'],
+                    vertical_spacing=0.1
+                )
+                
+                # Price chart (normalized)
+                norm_price1 = price1 / price1.iloc[0] * 100
+                norm_price2 = price2 / price2.iloc[0] * 100
+                
+                fig.add_trace(go.Scatter(x=price1.index, y=norm_price1, name=crypto1, line=dict(color='#00ff41')), row=1, col=1)
+                fig.add_trace(go.Scatter(x=price2.index, y=norm_price2, name=crypto2, line=dict(color='#ff4444')), row=1, col=1)
+                
+                # Z-score chart
+                fig.add_trace(go.Scatter(x=df.index, y=df['zscore'], name='Z-Score', line=dict(color='#00ffff')), row=2, col=1)
+                fig.add_hline(y=2.0, line_dash="dash", line_color="#ff4444", row=2, col=1)
+                fig.add_hline(y=-2.0, line_dash="dash", line_color="#00ff41", row=2, col=1)
+                fig.add_hline(y=0, line_color="#666666", row=2, col=1)
+                
+                fig.update_layout(height=600, plot_bgcolor='#000000', paper_bgcolor='#000000', font_color='#00ff41')
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Failed to calculate spread and signals")
         else:
             st.error("Insufficient data for analysis")
 
@@ -653,14 +666,6 @@ with tab2:
                         **ENTRY PRICE:** ${latest_signal['entry_price']:.6f}  
                         **STOP LOSS:** Z-Score {latest_signal['stop_loss']:.1f}  
                         **TAKE PROFIT:** Z-Score {latest_signal['take_profit']:.1f}  
-                        """)
-                        
-                        st.markdown("### POSITION SIZING")
-                        st.markdown(f"""
-                        **{trader.current_data['crypto1']}:** {position_info['asset1_action']} {position_info['asset1_quantity']:.6f}  
-                        **{trader.current_data['crypto2']}:** {position_info['asset2_action']} {position_info['asset2_quantity']:.6f}  
-                        **TOTAL EXPOSURE:** ${position_info['total_exposure']:.2f}  
-                        **MARGIN REQUIRED:** ${position_info['margin_required']:.2f}  
                         """)
                 
                 else:
@@ -1028,3 +1033,11 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("*Professional Pairs Trading System v1.0*")
     st.markdown("*Quantitative • Risk-Managed • Profitable*")
+                        
+                        st.markdown("### POSITION SIZING")
+                        st.markdown(f"""
+                        **{trader.current_data['crypto1']}:** {position_info['asset1_action']} {position_info['asset1_quantity']:.6f}  
+                        **{trader.current_data['crypto2']}:** {position_info['asset2_action']} {position_info['asset2_quantity']:.6f}  
+                        **TOTAL EXPOSURE:** ${position_info['total_exposure']:.2f}  
+                        **MARGIN REQUIRED:** ${position_info['margin_required']:.2f}  
+                        """)
