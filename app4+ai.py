@@ -63,14 +63,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Cryptocurrency tickers - expanded list
-CRYPTO_TICKERS = {
-    'BTC': 'BTC-USD', 'ETH': 'ETH-USD', 'BNB': 'BNB-USD', 'XRP': 'XRP-USD',
-    'ADA': 'ADA-USD', 'SOL': 'SOL-USD', 'DOT': 'DOT-USD', 'DOGE': 'DOGE-USD',
-    'AVAX': 'AVAX-USD', 'SHIB': 'SHIB-USD', 'MATIC': 'MATIC-USD', 'LTC': 'LTC-USD',
-    'UNI': 'UNI-USD', 'LINK': 'LINK-USD', 'ALGO': 'ALGO-USD', 'VET': 'VET-USD',
-    'ICP': 'ICP-USD', 'FIL': 'FIL-USD', 'TRX': 'TRX-USD', 'XLM': 'XLM-USD'
-}
-
+from constants.tickers import tickers
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_crypto_data(symbol, period='1y'):
     """Load cryptocurrency data with error handling"""
@@ -98,7 +91,7 @@ class ProfessionalPairsTrader:
     
     def __init__(self):
         self.optimal_params = {}
-        self.current_data = {}
+        self.current_data = None
         self.correlation_threshold = 0.7
         
     def calculate_correlation_statistics(self, price1, price2):
@@ -564,7 +557,7 @@ with tab1:
 with tab2:
     st.subheader("LIVE TRADING SIGNALS")
     
-    if 'current_data' in trader.__dict__ and trader.current_data:
+    if hasattr(trader, 'current_data') and trader.current_data:
         
         # Get latest signal
         signals = trader.current_data['signals']
@@ -637,7 +630,7 @@ with tab2:
 with tab3:
     st.subheader("PERFORMANCE ANALYSIS")
     
-    if 'current_data' in trader.__dict__ and trader.current_data:
+    if hasattr(trader, 'current_data') and trader.current_data:
         backtest = trader.current_data['backtest']
         
         # Performance metrics
@@ -766,7 +759,7 @@ with tab3:
 with tab4:
     st.subheader("CORRELATION & STATISTICS")
     
-    if 'current_data' in trader.__dict__ and trader.current_data:
+    if hasattr(trader, 'current_data') and trader.current_data:
         price1 = trader.current_data['price1']
         price2 = trader.current_data['price2']
         crypto1 = trader.current_data['crypto1']
@@ -912,7 +905,7 @@ with st.sidebar:
     st.markdown('<div style="background: #000000; padding: 15px; border: 1px solid #00ff41; color: #00ff41; font-family: Courier New;">', unsafe_allow_html=True)
     st.markdown("### TRADING SYSTEM STATUS")
     
-    if 'current_data' in trader.__dict__ and trader.current_data:
+    if hasattr(trader, 'current_data') and trader.current_data:
         st.success(f"""
         ACTIVE PAIR: {trader.current_data['crypto1']}/{trader.current_data['crypto2']}  
         HEDGE RATIO: {trader.current_data['hedge_ratio']:.3f}  
