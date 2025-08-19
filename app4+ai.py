@@ -665,4 +665,283 @@ if analyze_button or optimize_button:
                 with signal_col2:
                     st.markdown(f"""
                     ### {asset2_name} ({asset2_ticker})
-                    **ACTION:** {position_details['asset
+                    **ACTION:** {position_details['asset2_action']}  
+                    **QUANTITY:** {position_details['asset2_quantity']:.6f}  
+                    **PRICE:** ${position_details['asset2_price']:.4f}  
+                    **VALUE:** ${position_details['asset2_value']:.2f}  
+                    """)
+                
+                st.markdown(f"""
+                ---
+                **TOTAL EXPOSURE:** ${position_details['total_exposure']:.2f}  
+                **HEDGE RATIO:** {position_details['hedge_ratio']:.4f}  
+                **ENTRY Z-SCORE:** {latest_signal['zscore']:.2f}  
+                **EXIT TARGET:** ±{optimal_params['exit']:.1f}  
+                **STOP LOSS:** ±{optimal_params['stop']:.1f}  
+                """)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        else:
+            st.markdown('<div class="signal-inactive">', unsafe_allow_html=True)
+            st.markdown("## 📊 MONITORING MODE")
+            st.markdown(f"""
+            **CURRENT Z-SCORE:** {current_zscore:.2f}  
+            **ENTRY THRESHOLD:** ±{optimal_params['entry']:.1f}  
+            **DISTANCE TO SIGNAL:** {abs(optimal_params['entry'] - abs(current_zscore)):.2f}  
+            **OPTIMAL PARAMETERS:** Entry: {optimal_params['entry']:.1f} | Exit: {optimal_params['exit']:.1f} | Stop: {optimal_params['stop']:.1f}
+            """)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Charts
+        st.markdown("### MARKET ANALYSIS CHARTS")
+        
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=[
+                f'{asset1_name} vs {asset2_name} - Normalized Price Comparison',
+                'Z-Score Analysis & Signal Levels'
+            ],
+            vertical_spacing=0.12,
+            row_heights=[0.6, 0.4]
+        )
+        
+        # Normalize prices for comparison
+        norm_price1 = (price1 / price1.iloc[0]) * 100
+        norm_price2 = (price2 / price2.iloc[0]) * 100
+        
+        fig.add_trace(
+            go.Scatter(x=price1.index, y=norm_price1, name=asset1_name, 
+                      line=dict(color='#00ff41', width=2)), row=1, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=price2.index, y=norm_price2, name=asset2_name, 
+                      line=dict(color='#ff4444', width=2)), row=1, col=1
+        )
+        
+        # Z-score chart
+        if not analysis_df.empty:
+            fig.add_trace(
+                go.Scatter(x=analysis_df.index, y=analysis_df['zscore'], 
+                          name='Z-Score', line=dict(color='#00ffff', width=2)), row=2, col=1
+            )
+            
+            # Signal levels
+            fig.add_hline(y=optimal_params['entry'], line_dash="dash", 
+                         line_color="#ff4444", row=2, col=1, 
+                         annotation_text="Entry Level")
+            fig.add_hline(y=-optimal_params['entry'], line_dash="dash", 
+                         line_color="#00ff41", row=2, col=1)
+            fig.add_hline(y=optimal_params['exit'], line_dash="dot", 
+                         line_color="#ffff00", row=2, col=1, 
+                         annotation_text="Exit Level")
+            fig.add_hline(y=-optimal_params['exit'], line_dash="dot", 
+                         line_color="#ffff00", row=2, col=1)
+            fig.add_hline(y=0, line_color="#666666", row=2, col=1)
+        
+        fig.update_layout(
+            height=800,
+            plot_bgcolor='#000000',
+            paper_bgcolor='#000000',
+            font_color='#00ff41',
+            showlegend=True
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Trading Statistics
+        if not performance_metrics['trades_data'].empty:
+            st.markdown("### DETAILED PERFORMANCE STATISTICS")
+            
+            stat_col1, stat_col2, stat_col3 = st.columns(3)
+            
+            with stat_col1:
+                st.markdown("#### Trade Summary")
+                st.markdown(f"""
+                **Total Trades:** {performance_metrics['num_trades']}  
+                **Winning Trades:** {len(performance_metrics['trades_data'][performance_metrics['trades_data']['pnl_percentage'] > 0])}  
+                **Losing Trades:** {len(performance_metrics['trades_data'][performance_metrics['trades_data']['pnl_percentage'] <= 0])}  
+                **Win Rate:** {performance_metrics['win_rate']:.1f}%  
+                **Profit Factor:** {performance_metrics['profit_factor']:.2f}  
+                """)
+            
+            with stat_col2:
+                st.markdown("#### Return Analysis")
+                st.markdown(f"""
+                **Total Return:** {performance_metrics['total_return']:.2f}%  
+                **Average Win:** {performance_metrics['avg_win']:.2f}%  
+                **Average Loss:** {performance_metrics['avg_loss']:.2f}%  
+                **Max Drawdown:** {performance_metrics['max_drawdown']:.2f}%  
+                **Sharpe Ratio:** {performance_metrics['sharpe_ratio']:.2f}  
+                """)
+            
+            with stat_col3:
+                st.markdown("#### Best/Worst Trades")
+                if performance_metrics['best_trade'] is not None:
+                    best_trade = performance_metrics['best_trade']
+                    st.markdown(f"""
+                    **Best Trade:** +{best_trade['pnl_percentage']:.2f}%  
+                    **Date:** {best_trade['entry_date'].strftime('%Y-%m-%d')}  
+                    **Type:** {best_trade['position_type']}  
+                    """)
+                
+                if performance_metrics['worst_trade'] is not None:
+                    worst_trade = performance_metrics['worst_trade']
+                    st.markdown(f"""
+                    **Worst Trade:** {worst_trade['pnl_percentage']:.2f}%  
+                    **Date:** {worst_trade['entry_date'].strftime('%Y-%m-%d')}  
+                    **Type:** {worst_trade['position_type']}  
+                    """)
+            
+            # Trade history table
+            st.markdown("#### Complete Trade History")
+            trades_display = performance_metrics['trades_data'].copy()
+            trades_display['entry_date'] = trades_display['entry_date'].dt.strftime('%Y-%m-%d %H:%M')
+            trades_display['exit_date'] = trades_display['exit_date'].dt.strftime('%Y-%m-%d %H:%M')
+            trades_display = trades_display.round(4)
+            
+            st.dataframe(
+                trades_display[['entry_date', 'exit_date', 'position_type', 'entry_zscore', 
+                               'exit_zscore', 'pnl_percentage', 'exit_reason']],
+                use_container_width=True,
+                hide_index=True
+            )
+    
+    else:
+        st.error(f"❌ Insufficient data for {asset1_name} and {asset2_name}. Try different assets or time period.")
+
+# Save pair functionality
+if save_button and hasattr(system, 'current_analysis') and system.current_analysis:
+    pair_identifier = f"{system.current_analysis['asset1_name']}/{system.current_analysis['asset2_name']}"
+    
+    pair_data = {
+        'pair_name': pair_identifier,
+        'asset1_name': system.current_analysis['asset1_name'],
+        'asset2_name': system.current_analysis['asset2_name'],
+        'asset1_ticker': system.current_analysis['asset1_ticker'],
+        'asset2_ticker': system.current_analysis['asset2_ticker'],
+        'correlation': system.current_analysis['correlation_metrics']['correlation'],
+        'total_return': system.current_analysis['performance']['total_return'],
+        'win_rate': system.current_analysis['performance']['win_rate'],
+        'sharpe_ratio': system.current_analysis['performance']['sharpe_ratio'],
+        'optimal_params': system.current_analysis['optimal_params'],
+        'current_zscore': system.current_analysis['current_zscore']
+    }
+    
+    # Check if pair already exists
+    existing_pair = next((p for p in st.session_state.saved_pairs if p['pair_name'] == pair_identifier), None)
+    
+    if existing_pair:
+        st.warning(f"⚠️ Pair {pair_identifier} already saved. Updating with new analysis.")
+        st.session_state.saved_pairs = [p for p in st.session_state.saved_pairs if p['pair_name'] != pair_identifier]
+    
+    st.session_state.saved_pairs.append(pair_data)
+    st.success(f"✅ Saved pair: {pair_identifier}")
+
+# Clear data
+if clear_button:
+    system.current_analysis = {}
+    st.success("🗑️ Analysis data cleared")
+
+# Saved Pairs Management
+if st.session_state.saved_pairs:
+    st.markdown("### SAVED TRADING PAIRS")
+    
+    for idx, pair in enumerate(st.session_state.saved_pairs):
+        with st.expander(f"📊 {pair['pair_name']} | Return: {pair['total_return']:.1f}% | Win Rate: {pair['win_rate']:.1f}%"):
+            
+            pair_col1, pair_col2, pair_col3, pair_col4 = st.columns([2, 2, 1, 1])
+            
+            with pair_col1:
+                st.markdown(f"""
+                **Assets:** {pair['asset1_name']} / {pair['asset2_name']}  
+                **Tickers:** {pair['asset1_ticker']} / {pair['asset2_ticker']}  
+                **Correlation:** {pair['correlation']:.3f}  
+                """)
+            
+            with pair_col2:
+                st.markdown(f"""
+                **Total Return:** {pair['total_return']:.2f}%  
+                **Win Rate:** {pair['win_rate']:.1f}%  
+                **Sharpe Ratio:** {pair['sharpe_ratio']:.2f}  
+                """)
+            
+            with pair_col3:
+                params = pair['optimal_params']
+                st.markdown(f"""
+                **Entry:** ±{params['entry']:.1f}  
+                **Exit:** ±{params['exit']:.1f}  
+                **Stop:** ±{params['stop']:.1f}  
+                """)
+            
+            with pair_col4:
+                if st.button(f"📈 Load Pair", key=f"load_{idx}"):
+                    # Load this pair for analysis
+                    st.session_state.primary_asset = pair['asset1_name']
+                    st.session_state.secondary_asset = pair['asset2_name']
+                    st.rerun()
+                
+                if st.button(f"🗑️ Delete", key=f"delete_{idx}"):
+                    st.session_state.saved_pairs.pop(idx)
+                    st.rerun()
+
+# Sidebar Status Panel
+with st.sidebar:
+    st.markdown("### 🎯 SYSTEM STATUS")
+    
+    if hasattr(system, 'current_analysis') and system.current_analysis:
+        current = system.current_analysis
+        
+        st.success(f"✅ ACTIVE PAIR")
+        st.markdown(f"**{current['asset1_name']} / {current['asset2_name']}**")
+        
+        # Current metrics
+        st.metric("Correlation", f"{current['correlation_metrics']['correlation']:.3f}")
+        st.metric("Current Z-Score", f"{current['current_zscore']:.2f}")
+        st.metric("Backtest Return", f"{current['performance']['total_return']:.1f}%")
+        st.metric("Win Rate", f"{current['performance']['win_rate']:.1f}%")
+        
+        # Optimal parameters
+        params = current['optimal_params']
+        st.markdown("**Optimal Parameters:**")
+        st.markdown(f"Entry: ±{params['entry']:.1f}")
+        st.markdown(f"Exit: ±{params['exit']:.1f}")
+        st.markdown(f"Stop: ±{params['stop']:.1f}")
+        
+        # Signal status
+        if abs(current['current_zscore']) > params['entry']:
+            st.error("🚨 SIGNAL ACTIVE")
+        else:
+            st.info("📊 MONITORING")
+    
+    else:
+        st.info("💤 NO ACTIVE PAIR")
+        st.markdown("Select assets and run analysis")
+    
+    st.markdown("---")
+    st.markdown("### 📊 QUICK STATS")
+    st.metric("Saved Pairs", len(st.session_state.saved_pairs))
+    st.metric("Trading Capital", f"${trading_capital:,}")
+    st.metric("Leverage", f"{leverage_factor}x")
+    
+    st.markdown("---")
+    st.markdown("### 🔧 TOOLS")
+    
+    if st.button("📥 Export Data", use_container_width=True):
+        if hasattr(system, 'current_analysis') and system.current_analysis:
+            # Export current analysis data
+            st.download_button(
+                "Download Analysis",
+                data=system.current_analysis['signals_df'].to_csv(),
+                file_name=f"{system.current_analysis['asset1_name']}_{system.current_analysis['asset2_name']}_analysis.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("No data to export")
+    
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        st.cache_data.clear()
+        st.success("Cache cleared")
+    
+    st.markdown("---")
+    st.markdown("*Advanced Crypto Pairs Trading v2.0*")
