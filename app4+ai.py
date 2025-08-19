@@ -128,11 +128,10 @@ class AdvancedPairsTradingSystem:
                     return close_prices
             
             # If we reach here, data fetch failed
-            st.error(f"Insufficient data for {ticker}")
             return pd.Series(dtype=float)
             
         except Exception as e:
-            st.error(f"Error fetching {ticker}: {str(e)}")
+            # Return empty series on any error
             return pd.Series(dtype=float)
     
     def calculate_correlation_metrics(self, price1, price2):
