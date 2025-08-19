@@ -93,10 +93,25 @@ class ProfitMaximizer:
             return pd.Series(dtype=float)
     
     def calculate_correlation(self, price1, price2):
+        if price1.empty or price2.empty:
+            return 0.0
+        
         ret1 = price1.pct_change().dropna()
         ret2 = price2.pct_change().dropna()
+        
+        if ret1.empty or ret2.empty:
+            return 0.0
+        
         ret1, ret2 = ret1.align(ret2, join='inner')
-        return ret1.corr(ret2)
+        
+        if len(ret1) < 10 or len(ret2) < 10:
+            return 0.0
+        
+        try:
+            correlation = ret1.corr(ret2)
+            return correlation if not pd.isna(correlation) else 0.0
+        except:
+            return 0.0
     
     def find_optimal_params(self, price1, price2):
         """Find optimal z-score parameters for maximum profit"""
@@ -123,34 +138,51 @@ class ProfitMaximizer:
     
     def calculate_spread_zscore(self, price1, price2, lookback=60):
         """Calculate spread and z-score"""
+        if price1.empty or price2.empty:
+            return pd.DataFrame(), 1.0
+            
         # Align prices
         price1, price2 = price1.align(price2, join='inner')
         
-        if len(price1) < lookback + 20:
+        if len(price1) < max(lookback + 20, 50):
             return pd.DataFrame(), 1.0
         
-        # Calculate hedge ratio
-        X = price2.iloc[-lookback:].values.reshape(-1, 1)
-        y = price1.iloc[-lookback:].values
-        model = LinearRegression().fit(X, y)
-        hedge_ratio = float(model.coef_[0])
-        
-        # Calculate spread
-        spread = price1 - hedge_ratio * price2
-        
-        # Calculate rolling z-score
-        rolling_mean = spread.rolling(window=20).mean()
-        rolling_std = spread.rolling(window=20).std()
-        zscore = (spread - rolling_mean) / rolling_std
-        
-        df = pd.DataFrame({
-            'price1': price1,
-            'price2': price2, 
-            'spread': spread,
-            'zscore': zscore.fillna(0)
-        }, index=price1.index)
-        
-        return df, hedge_ratio
+        try:
+            # Calculate hedge ratio
+            X = price2.iloc[-lookback:].values.reshape(-1, 1)
+            y = price1.iloc[-lookback:].values
+            model = LinearRegression().fit(X, y)
+            hedge_ratio = float(model.coef_[0])
+            
+            # Validate hedge ratio
+            if abs(hedge_ratio) > 10 or abs(hedge_ratio) < 0.1:
+                hedge_ratio = 1.0
+            
+            # Calculate spread
+            spread = price1 - hedge_ratio * price2
+            
+            # Calculate rolling z-score
+            rolling_mean = spread.rolling(window=20, min_periods=10).mean()
+            rolling_std = spread.rolling(window=20, min_periods=10).std()
+            
+            # Prevent division by zero
+            rolling_std = rolling_std.fillna(rolling_std.mean())
+            rolling_std = rolling_std.replace(0, rolling_std.mean())
+            
+            zscore = (spread - rolling_mean) / rolling_std
+            
+            df = pd.DataFrame({
+                'price1': price1,
+                'price2': price2, 
+                'spread': spread,
+                'zscore': zscore.fillna(0)
+            }, index=price1.index)
+            
+            return df, hedge_ratio
+            
+        except Exception as e:
+            st.error(f"Error calculating spread: {e}")
+            return pd.DataFrame(), 1.0
     
     def generate_signals(self, price1, price2, entry_z=2.0, exit_z=0.5, stop_z=3.5):
         """Generate trading signals based on z-score"""
@@ -348,10 +380,13 @@ if analyze_btn or optimize_btn:
         price1 = system.load_data(crypto1, period)
         price2 = system.load_data(crypto2, period)
     
-    if not price1.empty and not price2.empty and len(price1) > 100:
+    if not price1.empty and not price2.empty and len(price1) > 100 and len(price2) > 100:
         
         # Calculate correlation
         correlation = system.calculate_correlation(price1, price2)
+        
+        if correlation < 0.1:
+            st.warning(f"Low correlation ({correlation:.3f}) between {crypto1} and {crypto2}. Consider different pairs.")
         
         if optimize_btn:
             with st.spinner("Optimizing parameters..."):
