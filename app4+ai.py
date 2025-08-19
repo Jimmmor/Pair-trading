@@ -88,72 +88,70 @@ class AdvancedPairsTradingSystem:
         
     @st.cache_data(ttl=300)
     def fetch_price_data(_self, ticker, period='1y'):
-        """Fetch price data with caching and better error handling"""
+        """Fetch price data with simplified approach"""
         try:
-            # Download data with specific parameters to avoid issues
-            data = yf.download(ticker, period=period, progress=False, auto_adjust=True, prepost=True, threads=True)
+            # Method 1: Use Ticker object directly (most reliable)
+            stock = yf.Ticker(ticker)
+            data = stock.history(period=period)
             
-            if data is None or data.empty:
-                st.error(f"No data returned for {ticker}")
-                return pd.Series(dtype=float)
+            if not data.empty and 'Close' in data.columns:
+                close_prices = data['Close'].dropna()
+                if len(close_prices) >= 30:
+                    return close_prices
             
-            # Handle different column structures from yfinance
-            close_prices = None
+            # Method 2: Try download with single ticker
+            data = yf.download(ticker, period=period, progress=False)
             
-            if isinstance(data.columns, pd.MultiIndex):
-                # Multi-level columns (when downloading multiple tickers or certain cases)
-                try:
-                    # Try to get Close column from level 0
-                    if ('Close', ticker) in data.columns:
-                        close_prices = data[('Close', ticker)]
-                    elif 'Close' in [col[0] for col in data.columns]:
-                        # Find Close in level 0
-                        close_col = [col for col in data.columns if col[0] == 'Close'][0]
+            if data is not None and not data.empty:
+                # Simple column extraction - avoid MultiIndex complexity
+                if hasattr(data, 'columns'):
+                    # Get all column names as strings
+                    col_names = []
+                    if isinstance(data.columns, pd.MultiIndex):
+                        # Flatten MultiIndex columns
+                        col_names = ['_'.join(str(x) for x in col if str(x) != 'nan').strip('_') for col in data.columns]
+                        data.columns = col_names
+                    else:
+                        col_names = list(data.columns)
+                    
+                    # Find Close column
+                    close_col = None
+                    for col in col_names:
+                        if 'Close' in str(col):
+                            close_col = col
+                            break
+                    
+                    if close_col and close_col in data.columns:
                         close_prices = data[close_col]
                     else:
                         # Fallback to last column
                         close_prices = data.iloc[:, -1]
-                except:
-                    # If all else fails, try flattening the MultiIndex
-                    data.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in data.columns]
-                    if 'Close' in data.columns:
-                        close_prices = data['Close']
-                    else:
-                        close_prices = data.iloc[:, -1]
-            else:
-                # Single-level columns (normal case)
-                if 'Close' in data.columns:
-                    close_prices = data['Close']
-                elif 'Adj Close' in data.columns:
-                    close_prices = data['Adj Close']
-                else:
-                    # Fallback to the last column (usually Close)
-                    close_prices = data.iloc[:, -1]
+                    
+                    # Ensure it's a Series
+                    if isinstance(close_prices, pd.DataFrame):
+                        close_prices = close_prices.iloc[:, 0]
+                    
+                    close_prices = close_prices.dropna()
+                    
+                    if len(close_prices) >= 30:
+                        return close_prices
             
-            # Ensure we have a Series, not DataFrame
-            if isinstance(close_prices, pd.DataFrame):
-                close_prices = close_prices.iloc[:, 0]
-            
-            # Clean the data
-            close_prices = close_prices.dropna()
-            
-            if len(close_prices) < 30:
-                st.warning(f"Insufficient data for {ticker}: only {len(close_prices)} data points")
-                return pd.Series(dtype=float)
-            
-            st.success(f"✅ Loaded {ticker}: {len(close_prices)} data points")
-            return close_prices
+            # If we get here, return empty Series
+            st.error(f"Could not fetch data for {ticker}")
+            return pd.Series(dtype=float)
             
         except Exception as e:
-            st.error(f"Failed to load {ticker}: {str(e)}")
-            # Try alternative approach with Ticker object
+            st.error(f"Error fetching {ticker}: {str(e)}")
+            
+            # Last resort: try a different approach
             try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period)
-                if not hist.empty and 'Close' in hist.columns:
-                    close_prices = hist['Close'].dropna()
-                    if len(close_prices) >= 30:
-                        st.success(f"✅ Loaded {ticker} (alternative method): {len(close_prices)} data points")
+                import yfinance as yf
+                ticker_obj = yf.Ticker(ticker)
+                info = ticker_obj.info
+                if info:  # If ticker exists
+                    hist = ticker_obj.history(period="1y", auto_adjust=True)
+                    if not hist.empty:
+                        close_prices = hist['Close'].dropna()
                         return close_prices
             except:
                 pass
