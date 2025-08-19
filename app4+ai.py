@@ -90,24 +90,49 @@ class AdvancedPairsTradingSystem:
     def fetch_price_data(_self, ticker, period='1y'):
         """Fetch price data with caching and better error handling"""
         try:
-            data = yf.download(ticker, period=period, progress=False)
-            if data.empty:
+            # Download data with specific parameters to avoid issues
+            data = yf.download(ticker, period=period, progress=False, auto_adjust=True, prepost=True, threads=True)
+            
+            if data is None or data.empty:
                 st.error(f"No data returned for {ticker}")
                 return pd.Series(dtype=float)
             
-            # Handle both single and multi-column data
+            # Handle different column structures from yfinance
+            close_prices = None
+            
             if isinstance(data.columns, pd.MultiIndex):
-                # Multi-level columns (when downloading multiple tickers)
-                if 'Close' in data.columns.get_level_1():
-                    close_prices = data.xs('Close', level=1, axis=1).iloc[:, 0]
-                else:
-                    close_prices = data.iloc[:, -1]
+                # Multi-level columns (when downloading multiple tickers or certain cases)
+                try:
+                    # Try to get Close column from level 0
+                    if ('Close', ticker) in data.columns:
+                        close_prices = data[('Close', ticker)]
+                    elif 'Close' in [col[0] for col in data.columns]:
+                        # Find Close in level 0
+                        close_col = [col for col in data.columns if col[0] == 'Close'][0]
+                        close_prices = data[close_col]
+                    else:
+                        # Fallback to last column
+                        close_prices = data.iloc[:, -1]
+                except:
+                    # If all else fails, try flattening the MultiIndex
+                    data.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in data.columns]
+                    if 'Close' in data.columns:
+                        close_prices = data['Close']
+                    else:
+                        close_prices = data.iloc[:, -1]
             else:
-                # Single-level columns
+                # Single-level columns (normal case)
                 if 'Close' in data.columns:
                     close_prices = data['Close']
+                elif 'Adj Close' in data.columns:
+                    close_prices = data['Adj Close']
                 else:
+                    # Fallback to the last column (usually Close)
                     close_prices = data.iloc[:, -1]
+            
+            # Ensure we have a Series, not DataFrame
+            if isinstance(close_prices, pd.DataFrame):
+                close_prices = close_prices.iloc[:, 0]
             
             # Clean the data
             close_prices = close_prices.dropna()
@@ -116,10 +141,23 @@ class AdvancedPairsTradingSystem:
                 st.warning(f"Insufficient data for {ticker}: only {len(close_prices)} data points")
                 return pd.Series(dtype=float)
             
+            st.success(f"✅ Loaded {ticker}: {len(close_prices)} data points")
             return close_prices
             
         except Exception as e:
             st.error(f"Failed to load {ticker}: {str(e)}")
+            # Try alternative approach with Ticker object
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period=period)
+                if not hist.empty and 'Close' in hist.columns:
+                    close_prices = hist['Close'].dropna()
+                    if len(close_prices) >= 30:
+                        st.success(f"✅ Loaded {ticker} (alternative method): {len(close_prices)} data points")
+                        return close_prices
+            except:
+                pass
+            
             return pd.Series(dtype=float)
     
     def calculate_correlation_metrics(self, price1, price2):
