@@ -88,74 +88,51 @@ class AdvancedPairsTradingSystem:
         
     @st.cache_data(ttl=300)
     def fetch_price_data(_self, ticker, period='1y'):
-        """Fetch price data with simplified approach"""
+        """Fetch price data with improved error handling"""
         try:
-            # Method 1: Use Ticker object directly (most reliable)
+            # Method 1: Direct ticker approach
             stock = yf.Ticker(ticker)
-            data = stock.history(period=period)
+            data = stock.history(period=period, auto_adjust=True, prepost=False)
             
             if not data.empty and 'Close' in data.columns:
                 close_prices = data['Close'].dropna()
                 if len(close_prices) >= 30:
                     return close_prices
             
-            # Method 2: Try download with single ticker
-            data = yf.download(ticker, period=period, progress=False)
+            # Method 2: Download approach
+            data = yf.download(ticker, period=period, progress=False, auto_adjust=True)
             
             if data is not None and not data.empty:
-                # Simple column extraction - avoid MultiIndex complexity
-                if hasattr(data, 'columns'):
-                    # Get all column names as strings
-                    col_names = []
-                    if isinstance(data.columns, pd.MultiIndex):
-                        # Flatten MultiIndex columns
-                        col_names = ['_'.join(str(x) for x in col if str(x) != 'nan').strip('_') for col in data.columns]
-                        data.columns = col_names
+                # Handle MultiIndex columns
+                if isinstance(data.columns, pd.MultiIndex):
+                    # Find Close column in MultiIndex
+                    close_cols = [col for col in data.columns if 'Close' in str(col)]
+                    if close_cols:
+                        close_prices = data[close_cols[0]]
                     else:
-                        col_names = list(data.columns)
-                    
-                    # Find Close column
-                    close_col = None
-                    for col in col_names:
-                        if 'Close' in str(col):
-                            close_col = col
-                            break
-                    
-                    if close_col and close_col in data.columns:
-                        close_prices = data[close_col]
+                        close_prices = data.iloc[:, -1]  # Last column
+                else:
+                    # Simple columns
+                    if 'Close' in data.columns:
+                        close_prices = data['Close']
                     else:
-                        # Fallback to last column
                         close_prices = data.iloc[:, -1]
-                    
-                    # Ensure it's a Series
-                    if isinstance(close_prices, pd.DataFrame):
-                        close_prices = close_prices.iloc[:, 0]
-                    
-                    close_prices = close_prices.dropna()
-                    
-                    if len(close_prices) >= 30:
-                        return close_prices
+                
+                # Ensure Series format
+                if isinstance(close_prices, pd.DataFrame):
+                    close_prices = close_prices.iloc[:, 0]
+                
+                close_prices = close_prices.dropna()
+                
+                if len(close_prices) >= 30:
+                    return close_prices
             
-            # If we get here, return empty Series
-            st.error(f"Could not fetch data for {ticker}")
+            # If we reach here, data fetch failed
+            st.error(f"Insufficient data for {ticker}")
             return pd.Series(dtype=float)
             
         except Exception as e:
             st.error(f"Error fetching {ticker}: {str(e)}")
-            
-            # Last resort: try a different approach
-            try:
-                import yfinance as yf
-                ticker_obj = yf.Ticker(ticker)
-                info = ticker_obj.info
-                if info:  # If ticker exists
-                    hist = ticker_obj.history(period="1y", auto_adjust=True)
-                    if not hist.empty:
-                        close_prices = hist['Close'].dropna()
-                        return close_prices
-            except:
-                pass
-            
             return pd.Series(dtype=float)
     
     def calculate_correlation_metrics(self, price1, price2):
@@ -305,6 +282,16 @@ class AdvancedPairsTradingSystem:
                 st.warning("Insufficient data for spread calculation")
                 return pd.DataFrame(), 1.0
             
+            # Clean data - remove NaN and infinite values
+            price1 = price1.replace([np.inf, -np.inf], np.nan).dropna()
+            price2 = price2.replace([np.inf, -np.inf], np.nan).dropna()
+            
+            # Re-align after cleaning
+            price1, price2 = price1.align(price2, join='inner')
+            
+            if len(price1) < 20:
+                return pd.DataFrame(), 1.0
+            
             # Dynamic hedge ratio calculation
             recent_data_points = min(lookback_period, len(price1), 100)
             
@@ -317,7 +304,7 @@ class AdvancedPairsTradingSystem:
                     y = price1.iloc[-recent_data_points:].values
                     
                     # Remove any NaN values
-                    mask = ~(np.isnan(X.flatten()) | np.isnan(y))
+                    mask = ~(np.isnan(X.flatten()) | np.isnan(y) | np.isinf(X.flatten()) | np.isinf(y))
                     if mask.sum() < 5:  # Need at least 5 valid points
                         hedge_ratio = 1.0
                     else:
@@ -328,7 +315,8 @@ class AdvancedPairsTradingSystem:
                         hedge_ratio = float(model.coef_[0])
                         
                         # Validate hedge ratio
-                        if abs(hedge_ratio) > 20 or abs(hedge_ratio) < 0.01 or np.isnan(hedge_ratio):
+                        if (abs(hedge_ratio) > 20 or abs(hedge_ratio) < 0.01 or 
+                            np.isnan(hedge_ratio) or np.isinf(hedge_ratio)):
                             hedge_ratio = price1.mean() / price2.mean() if price2.mean() != 0 and not np.isnan(price2.mean()) else 1.0
                 
                 except Exception:
@@ -336,7 +324,7 @@ class AdvancedPairsTradingSystem:
             
             # Calculate spread
             spread = price1 - hedge_ratio * price2
-            spread = spread.dropna()
+            spread = spread.replace([np.inf, -np.inf], np.nan).dropna()
             
             if len(spread) < 10:
                 return pd.DataFrame(), hedge_ratio
@@ -355,16 +343,21 @@ class AdvancedPairsTradingSystem:
             
             # Calculate z-score
             zscore = (spread - rolling_mean) / rolling_std
-            zscore = zscore.fillna(0)
+            zscore = zscore.replace([np.inf, -np.inf], np.nan).fillna(0)
             
-            # Align all series
+            # Create aligned dataframe
+            common_index = price1.index.intersection(price2.index).intersection(spread.index).intersection(zscore.index)
+            
+            if len(common_index) < 10:
+                return pd.DataFrame(), hedge_ratio
+                
             aligned_data = pd.DataFrame({
-                'price1': price1,
-                'price2': price2,
-                'spread': spread,
-                'zscore': zscore,
-                'rolling_mean': rolling_mean,
-                'rolling_std': rolling_std
+                'price1': price1.loc[common_index],
+                'price2': price2.loc[common_index],
+                'spread': spread.loc[common_index],
+                'zscore': zscore.loc[common_index],
+                'rolling_mean': rolling_mean.loc[common_index],
+                'rolling_std': rolling_std.loc[common_index]
             }).dropna()
             
             return aligned_data, hedge_ratio
@@ -385,17 +378,33 @@ class AdvancedPairsTradingSystem:
             current_position = 0  # 0=flat, 1=long_spread, -1=short_spread
             
             for timestamp, row in analysis_df.iterrows():
+                # Validate all numeric values
                 zscore = row['zscore']
+                price1_val = row['price1']
+                price2_val = row['price2']
+                spread_val = row['spread']
                 
-                # Skip if zscore is NaN or infinite
-                if pd.isna(zscore) or np.isinf(zscore):
+                # Skip if any values are NaN or infinite
+                if (pd.isna(zscore) or np.isinf(zscore) or
+                    pd.isna(price1_val) or np.isinf(price1_val) or
+                    pd.isna(price2_val) or np.isinf(price2_val) or
+                    pd.isna(spread_val) or np.isinf(spread_val)):
+                    continue
+                
+                # Ensure all values are finite numbers
+                try:
+                    zscore = float(zscore)
+                    price1_val = float(price1_val)
+                    price2_val = float(price2_val)
+                    spread_val = float(spread_val)
+                except (ValueError, TypeError):
                     continue
                 
                 signal_data = {
                     'timestamp': timestamp,
-                    'price1': row['price1'],
-                    'price2': row['price2'],
-                    'spread': row['spread'],
+                    'price1': price1_val,
+                    'price2': price2_val,
+                    'spread': spread_val,
                     'zscore': zscore,
                     'position': current_position,
                     'action': 'HOLD',
@@ -407,32 +416,32 @@ class AdvancedPairsTradingSystem:
                 if current_position == 0:  # No position
                     if zscore <= -entry_zscore:  # Enter long spread
                         signal_data['action'] = 'ENTER_LONG_SPREAD'
-                        signal_data['entry_price'] = row['spread']
+                        signal_data['entry_price'] = spread_val
                         current_position = 1
                         
                     elif zscore >= entry_zscore:  # Enter short spread
                         signal_data['action'] = 'ENTER_SHORT_SPREAD'
-                        signal_data['entry_price'] = row['spread']
+                        signal_data['entry_price'] = spread_val
                         current_position = -1
                 
                 elif current_position == 1:  # Long spread position
                     if zscore >= -exit_zscore:  # Normal exit
                         signal_data['action'] = 'EXIT_LONG_SPREAD'
-                        signal_data['exit_price'] = row['spread']
+                        signal_data['exit_price'] = spread_val
                         current_position = 0
                     elif zscore <= -stop_zscore:  # Stop loss
                         signal_data['action'] = 'STOP_LONG_SPREAD'
-                        signal_data['exit_price'] = row['spread']
+                        signal_data['exit_price'] = spread_val
                         current_position = 0
                 
                 elif current_position == -1:  # Short spread position
                     if zscore <= exit_zscore:  # Normal exit
                         signal_data['action'] = 'EXIT_SHORT_SPREAD'
-                        signal_data['exit_price'] = row['spread']
+                        signal_data['exit_price'] = spread_val
                         current_position = 0
                     elif zscore >= stop_zscore:  # Stop loss
                         signal_data['action'] = 'STOP_SHORT_SPREAD'
-                        signal_data['exit_price'] = row['spread']
+                        signal_data['exit_price'] = spread_val
                         current_position = 0
                 
                 signal_data['position'] = current_position
@@ -467,11 +476,18 @@ class AdvancedPairsTradingSystem:
                 
                 elif signal['action'] in ['EXIT_LONG_SPREAD', 'EXIT_SHORT_SPREAD', 'STOP_LONG_SPREAD', 'STOP_SHORT_SPREAD']:
                     if current_trade and signal['exit_price'] is not None:
-                        # Calculate P&L
+                        # Validate numeric values
                         entry_spread = current_trade['entry_spread']
                         exit_spread = signal['exit_price']
                         
-                        if pd.isna(entry_spread) or pd.isna(exit_spread):
+                        if (pd.isna(entry_spread) or pd.isna(exit_spread) or
+                            np.isinf(entry_spread) or np.isinf(exit_spread)):
+                            continue
+                        
+                        try:
+                            entry_spread = float(entry_spread)
+                            exit_spread = float(exit_spread)
+                        except (ValueError, TypeError):
                             continue
                         
                         if current_trade['position_type'] == 'ENTER_LONG_SPREAD':
@@ -483,7 +499,8 @@ class AdvancedPairsTradingSystem:
                         pnl_percentage = (pnl / abs(entry_spread)) * 100 if abs(entry_spread) > 0 else 0
                         
                         # Skip trades with extreme or invalid returns
-                        if abs(pnl_percentage) < 100:  # Sanity check
+                        if (not np.isnan(pnl_percentage) and not np.isinf(pnl_percentage) and
+                            abs(pnl_percentage) < 100):  # Sanity check
                             trade_record = {
                                 'entry_date': current_trade['entry_date'],
                                 'exit_date': signal['timestamp'],
@@ -537,7 +554,8 @@ class AdvancedPairsTradingSystem:
                 sharpe_ratio = (returns_series.mean() / returns_series.std()) * np.sqrt(252)
             
             # Handle NaN values
-            for metric in ['total_return', 'win_rate', 'avg_win', 'avg_loss', 'max_drawdown', 'sharpe_ratio']:
+            metrics_to_clean = ['total_return', 'win_rate', 'avg_win', 'avg_loss', 'max_drawdown', 'sharpe_ratio']
+            for metric in metrics_to_clean:
                 value = locals()[metric]
                 if pd.isna(value) or np.isinf(value):
                     locals()[metric] = 0
@@ -689,16 +707,16 @@ with col5:
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    analyze_button = st.button("🔍 ANALYZE PAIR", type="primary", use_container_width=True)
+    analyze_button = st.button("ANALYZE PAIR", type="primary", use_container_width=True)
 
 with col2:
-    optimize_button = st.button("⚡ OPTIMIZE PARAMS", use_container_width=True)
+    optimize_button = st.button("OPTIMIZE PARAMS", use_container_width=True)
 
 with col3:
-    save_button = st.button("💾 SAVE PAIR", use_container_width=True)
+    save_button = st.button("SAVE PAIR", use_container_width=True)
 
 with col4:
-    clear_button = st.button("🗑️ CLEAR DATA", use_container_width=True)
+    clear_button = st.button("CLEAR DATA", use_container_width=True)
 
 # Main Analysis
 if analyze_button or optimize_button:
@@ -712,7 +730,7 @@ if analyze_button or optimize_button:
     if (not price1.empty and not price2.empty and 
         len(price1) >= min_data_points and len(price2) >= min_data_points):
         
-        st.success(f"✅ Data loaded: {asset1_name} ({len(price1)} points), {asset2_name} ({len(price2)} points)")
+        st.success(f"Data loaded: {asset1_name} ({len(price1)} points), {asset2_name} ({len(price2)} points)")
         
         # Correlation analysis
         with st.spinner("Calculating correlation metrics..."):
@@ -721,13 +739,13 @@ if analyze_button or optimize_button:
         # Show correlation warning but continue
         if not correlation_metrics.get('suitable', False):
             correlation_value = correlation_metrics.get('correlation', 0)
-            st.warning(f"⚠️ Correlation: {correlation_value:.3f}. This pair may have limited trading opportunities.")
+            st.warning(f"Correlation: {correlation_value:.3f}. This pair may have limited trading opportunities.")
         
         # Parameter optimization
         if optimize_button:
-            with st.spinner("🔬 Optimizing parameters for maximum profit..."):
+            with st.spinner("Optimizing parameters for maximum profit..."):
                 optimal_params, optimization_score = system.optimize_zscore_parameters(price1, price2)
-                st.info(f"✅ Optimization completed. Score: {optimization_score:.3f}")
+                st.info(f"Optimization completed. Score: {optimization_score:.3f}")
         else:
             optimal_params = {'entry': 2.0, 'exit': 0.5, 'stop': 3.5}
             optimization_score = 0
@@ -737,7 +755,7 @@ if analyze_button or optimize_button:
             signals_df = system.generate_trading_signals(price1, price2, **optimal_params)
         
         if signals_df.empty:
-            st.error("❌ Could not generate trading signals. Try different parameters or time period.")
+            st.error("Could not generate trading signals. Try different parameters or time period.")
         else:
             with st.spinner("Running backtest..."):
                 performance_metrics = system.backtest_strategy(signals_df, price1, price2)
@@ -813,7 +831,7 @@ if analyze_button or optimize_button:
                 abs(current_zscore) > optimal_params['entry']):
                 
                 st.markdown('<div class="signal-active">', unsafe_allow_html=True)
-                st.markdown(f"## 🚨 ACTIVE SIGNAL: {latest_signal['action']}")
+                st.markdown(f"## ACTIVE SIGNAL: {latest_signal['action']}")
                 
                 # Calculate position sizes
                 position_details = system.calculate_position_sizes(
@@ -854,7 +872,7 @@ if analyze_button or optimize_button:
             
             else:
                 st.markdown('<div class="signal-inactive">', unsafe_allow_html=True)
-                st.markdown("## 📊 MONITORING MODE")
+                st.markdown("## MONITORING MODE")
                 st.markdown(f"""
                 **CURRENT Z-SCORE:** {current_zscore:.2f}  
                 **ENTRY THRESHOLD:** ±{optimal_params['entry']:.1f}  
@@ -986,18 +1004,18 @@ if analyze_button or optimize_button:
                     st.warning(f"Trade history display failed: {e}")
             
             else:
-                st.info("📊 No trades generated with current parameters. Try adjusting the entry threshold or time period.")
+                st.info("No trades generated with current parameters. Try adjusting the entry threshold or time period.")
     
     else:
         # Better error messaging
         if price1.empty:
-            st.error(f"❌ No data available for {asset1_name} ({asset1_ticker})")
+            st.error(f"No data available for {asset1_name} ({asset1_ticker})")
         elif price2.empty:
-            st.error(f"❌ No data available for {asset2_name} ({asset2_ticker})")
+            st.error(f"No data available for {asset2_name} ({asset2_ticker})")
         else:
-            st.error(f"❌ Insufficient data: {asset1_name} ({len(price1)} points), {asset2_name} ({len(price2)} points). Need at least {min_data_points} points each.")
+            st.error(f"Insufficient data: {asset1_name} ({len(price1)} points), {asset2_name} ({len(price2)} points). Need at least {min_data_points} points each.")
         
-        st.info("💡 Try selecting different assets or a longer time period (1y or 2y)")
+        st.info("Try selecting different assets or a longer time period (1y or 2y)")
 
 # Save pair functionality
 if save_button and hasattr(system, 'current_analysis') and system.current_analysis:
@@ -1022,29 +1040,29 @@ if save_button and hasattr(system, 'current_analysis') and system.current_analys
         existing_pair = next((p for p in st.session_state.saved_pairs if p['pair_name'] == pair_identifier), None)
         
         if existing_pair:
-            st.warning(f"⚠️ Pair {pair_identifier} already saved. Updating with new analysis.")
+            st.warning(f"Pair {pair_identifier} already saved. Updating with new analysis.")
             st.session_state.saved_pairs = [p for p in st.session_state.saved_pairs if p['pair_name'] != pair_identifier]
         
         st.session_state.saved_pairs.append(pair_data)
-        st.success(f"✅ Saved pair: {pair_identifier}")
+        st.success(f"Saved pair: {pair_identifier}")
     
     except Exception as e:
         st.error(f"Failed to save pair: {e}")
 
 elif save_button:
-    st.warning("⚠️ No analysis data to save. Run analysis first.")
+    st.warning("No analysis data to save. Run analysis first.")
 
 # Clear data
 if clear_button:
     system.current_analysis = {}
-    st.success("🗑️ Analysis data cleared")
+    st.success("Analysis data cleared")
 
 # Saved Pairs Management
 if st.session_state.saved_pairs:
     st.markdown("### SAVED TRADING PAIRS")
     
     for idx, pair in enumerate(st.session_state.saved_pairs):
-        with st.expander(f"📊 {pair['pair_name']} | Return: {pair['total_return']:.1f}% | Win Rate: {pair['win_rate']:.1f}%"):
+        with st.expander(f"{pair['pair_name']} | Return: {pair['total_return']:.1f}% | Win Rate: {pair['win_rate']:.1f}%"):
             
             pair_col1, pair_col2, pair_col3, pair_col4 = st.columns([2, 2, 1, 1])
             
@@ -1071,24 +1089,24 @@ if st.session_state.saved_pairs:
                 """)
             
             with pair_col4:
-                if st.button(f"📈 Load Pair", key=f"load_{idx}"):
+                if st.button(f"Load Pair", key=f"load_{idx}"):
                     # Load this pair for analysis
                     st.session_state.primary_asset = pair['asset1_name']
                     st.session_state.secondary_asset = pair['asset2_name']
                     st.rerun()
                 
-                if st.button(f"🗑️ Delete", key=f"delete_{idx}"):
+                if st.button(f"Delete", key=f"delete_{idx}"):
                     st.session_state.saved_pairs.pop(idx)
                     st.rerun()
 
 # Sidebar Status Panel
 with st.sidebar:
-    st.markdown("### 🎯 SYSTEM STATUS")
+    st.markdown("### SYSTEM STATUS")
     
     if hasattr(system, 'current_analysis') and system.current_analysis:
         current = system.current_analysis
         
-        st.success(f"✅ ACTIVE PAIR")
+        st.success(f"ACTIVE PAIR")
         st.markdown(f"**{current['asset1_name']} / {current['asset2_name']}**")
         
         # Current metrics
@@ -1106,24 +1124,24 @@ with st.sidebar:
         
         # Signal status
         if abs(current['current_zscore']) > params['entry']:
-            st.error("🚨 SIGNAL ACTIVE")
+            st.error("SIGNAL ACTIVE")
         else:
-            st.info("📊 MONITORING")
+            st.info("MONITORING")
     
     else:
-        st.info("💤 NO ACTIVE PAIR")
+        st.info("NO ACTIVE PAIR")
         st.markdown("Select assets and run analysis")
     
     st.markdown("---")
-    st.markdown("### 📊 QUICK STATS")
+    st.markdown("### QUICK STATS")
     st.metric("Saved Pairs", len(st.session_state.saved_pairs))
     st.metric("Trading Capital", f"${trading_capital:,}")
     st.metric("Leverage", f"{leverage_factor}x")
     
     st.markdown("---")
-    st.markdown("### 🔧 TOOLS")
+    st.markdown("### TOOLS")
     
-    if st.button("📥 Export Data", use_container_width=True):
+    if st.button("Export Data", use_container_width=True):
         if hasattr(system, 'current_analysis') and system.current_analysis and not system.current_analysis.get('signals_df', pd.DataFrame()).empty:
             try:
                 # Export current analysis data
@@ -1138,7 +1156,7 @@ with st.sidebar:
         else:
             st.warning("No data to export")
     
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button("Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.success("Cache cleared")
     
